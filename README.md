@@ -2,7 +2,7 @@
 
 Author: Chan Mun Fai 
 
-This is the repository for my MSc in Artificial Intelligence individual project (dissertation) at Imperial College. 
+This is the UPDATED repository for my MSc in Artificial Intelligence individual project (dissertation) at Imperial College. 
 
 # Table of Contents 
    * [Variational Recurrent Neural Network(VRNN)](#Variational-Recurrent-Neural-Network(VRNN))
