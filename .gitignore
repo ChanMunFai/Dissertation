@@ -1,0 +1,7 @@
+saves/
+dataset/
+__pycache__/
+runs/
+out/
+.ideas/
+.wandb/
