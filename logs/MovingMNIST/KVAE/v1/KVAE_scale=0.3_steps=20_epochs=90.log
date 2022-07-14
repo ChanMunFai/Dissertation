@@ -1,0 +1,10 @@
+INFO:root:Namespace(K=7, a_dim=2, alpha='rnn', batch_size=128, clip=150, dataset='MovingMNIST', device=device(type='cuda'), epochs=90, initial_epochs=10, learning_rate=0.007, lstm_layers=1, model='KVAE', save_every=10, scale=0.3, scheduler_step=20, subdirectory='v1', wandb_on='True', x_dim=1, z_dim=5)
+INFO:root:Starting KVAE training for 90 epochs.
+INFO:root:Train Loss, Reconstruction Loss, log q(a), ELBO_KF, MSE
+INFO:root:3371.47164292, 8192.25042639, 2.37826005, -911.41816581, 2283.71006581, 0.007
+INFO:root:1798.06982126, 5852.64470318, 13.51888283, -28.75745364, 1669.56501706, 0.007
+INFO:root:1720.54296523, 5615.25552239, 13.73637416, -22.22985488, 1637.82943511, 0.007
+INFO:root:1680.18625553, 5488.25737236, 15.81482471, -17.89414643, 1615.50117772, 0.007
+INFO:root:1659.55167328, 5423.85733935, 16.18408532, -16.21030795, 1602.55401182, 0.007
+INFO:root:1644.34199941, 5373.05875880, 16.25612885, -16.16817128, 1591.96090311, 0.007
+INFO:root:1642.92463895, 5366.49333599, 16.32404491, -16.65252875, 1590.04549096, 0.007

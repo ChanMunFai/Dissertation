@@ -8,6 +8,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 
 from vrnn.conv_layers import Conv, Conv_64, Deconv
+from utils import *
 
 # changing device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -316,3 +317,10 @@ class VRNN(nn.Module):
 
     def _nll_gauss(self, mean, std, x):
         return torch.sum(torch.log(std + EPS) + torch.log(2*torch.pi)/2 + (x - mean).pow(2)/(2*std.pow(2)))
+
+if __name__ == "__main__": 
+    vrnn = VRNN(64, 1024, 32, 1)
+    print("Number of parameters in my Implementation of VRNN", count_parameters(vrnn))
+
+    
+

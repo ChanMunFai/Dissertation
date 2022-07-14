@@ -6,3 +6,7 @@ def checkdir(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
         print('Make dir: %s'%directory)
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+

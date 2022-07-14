@@ -27,7 +27,7 @@ class VRNNTrainer:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=self.args.step_size, gamma=0.5)
 
-        if state_dict: 
+        if state_dict_path: 
             state_dict = torch.load(state_dict_path, map_location = self.args.device)
             self.model.load_state_dict(state_dict)
 
@@ -46,7 +46,6 @@ class VRNNTrainer:
             for data, _ in tqdm(train_loader):
 
                 data = data.to(self.args.device)
-                data = torch.unsqueeze(data, 2) # Batch Size X Seq Length X Channels X Height X Width
                 data = (data - data.min()) / (data.max() - data.min())
 
                 #forward + backward + optimize
@@ -100,7 +99,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--model', default="VRNN", type=str)
 parser.add_argument('--version', default="v1", type=str)
-parser.add_argument('--subdirectory', default="finetuned4", type=str)
+parser.add_argument('--subdirectory', default="testing", type=str)
 
 # These arguments can only be changed if we use a model version that is not v1 or v0
 parser.add_argument('--xdim', default=64, type=int)
@@ -116,7 +115,8 @@ parser.add_argument('--learning_rate', default=1e-4, type=float)
 parser.add_argument('--batch_size', default=50, type=int)
 parser.add_argument('--step_size', default = 1000000, type = int)
 
-state_dict_path = "saves/v1/important/vrnn_state_dict_v1_beta=0.5_400.pth"  # None otherwise 
+# state_dict_path = "saves/v1/important/vrnn_state_dict_v1_beta=0.5_400.pth"  # None otherwise 
+state_dict_path = None 
 
 def main():
     seed = 128
@@ -163,7 +163,7 @@ def main():
     logging.info(args)
 
     # Datasets
-    train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
+    train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
     train_loader = torch.utils.data.DataLoader(
                 dataset=train_set,
                 batch_size=args.batch_size,

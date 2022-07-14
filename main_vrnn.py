@@ -186,7 +186,7 @@ def main():
     print(args)
 
     # Datasets
-    train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
+    train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
     train_loader = torch.utils.data.DataLoader(
                 dataset=train_set,
                 batch_size=args.batch_size,
