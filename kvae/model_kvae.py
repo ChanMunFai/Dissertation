@@ -21,20 +21,20 @@ class KalmanVAE(nn.Module):
         self.scale = self.args.scale
         self.device = self.args.device 
         self.alpha = self.args.alpha 
+        self.lstm_layers = self.args.lstm_layers
 
         if self.args.dataset == "MovingMNIST": 
             self.encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = 2).to(self.device)
             self.decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 64).to(self.device)
             # self.decoder = Decoder64(a_dim = 2, enc_shape = [32, 7, 7], device = self.device).to(self.device) # change this to encoder shape
-        elif self.args.dataset == "BouncingBall": 
+        elif self.args.dataset == "BouncingBall_20" or self.args.dataset == "BouncingBall_50": 
             self.encoder = CNNFastEncoder(1, self.a_dim).to(self.device)
-            # self.encoder = KvaeEncoder(input_channels=1, input_size = 32, a_dim = 2).to(self.device)
             self.decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 32).to(self.device)
 
         if self.alpha == "mlp": 
             self.parameter_net = MLP(32, 50, self.K).to(self.device)
         else:  
-            self.parameter_net = nn.LSTM(self.a_dim, 50, 1, batch_first=True).to(self.device) 
+            self.parameter_net = nn.LSTM(self.a_dim, 50, self.lstm_layers, batch_first=True).to(self.device) 
             self.alpha_out = nn.Linear(50, self.K).to(self.device)
 
         # Initialise a_1 (optional)
@@ -359,23 +359,13 @@ class KalmanVAE(nn.Module):
 
         with torch.no_grad(): 
             a_sample, *_ = self._encode(input) 
-            filtered, A_t, C_t, weights = self._kalman_posterior(a_sample, filter_only = False) 
+            filtered, A_t, C_t, weights = self._kalman_posterior(a_sample, filter_only = True) 
             
             # print("Weights for Seen data:", weights)
 
             mu_z, sigma_z = filtered  
             z_dist = MultivariateNormal(mu_z.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z))
             z_sample = z_dist.sample()
-
-            # print(a_sample)
-
-            # # print("Z sequence (seen)", z_sample) # looks okay 
-            # print("2nd last A_t", A_t[:,-2])
-            # print("2nd last C_t", C_t[:,-2])
-            # print("Last A_t", A_t[:,-1])
-            # print("Last C_t", C_t[:,-1])
-
-            # print("#############")
 
             ### Unseen data
             z_sequence = torch.zeros((B, pred_len, self.z_dim), device = self.device)
@@ -385,30 +375,13 @@ class KalmanVAE(nn.Module):
 
             for t in range(pred_len):
                 hidden_state, cell_state = self.state_dyn_net 
-        
-                # print(a_t.dtype, z_t.dtype, hidden_state.dtype, cell_state.dtype)
-
-                # print("a_t:", a_t)
-                # print("z_t:", z_t) # goes towards 0 
 
                 dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
                 dyn_emb = self.alpha_out(dyn_emb)
                 weights = dyn_emb.softmax(-1).squeeze(1)
                 
-                # print("Weights are", weights)
-
                 A_t = torch.matmul(weights, self.A.reshape(self.K,-1)).reshape(B,-1,self.z_dim,self.z_dim) # only for 1 time step 
                 C_t = torch.matmul(weights, self.C.reshape(self.K,-1)).reshape(B,-1,self.a_dim,self.z_dim)
-
-                # print("A_t", A_t)
-                # print("C_t", C_t)
-
-                # Decode Latent function 
-                # a_t_new, z_t_new = self.decode_latent(z_t, A_t, C_t)
-                # print("new a_t:", a_t_new)
-                # print("new z_t:", z_t_new)
-
-                # print("=====>")
 
                 # Generate z_t+1
                 z_t = torch.matmul(A_t, z_t.unsqueeze(-1)).squeeze(-1)
@@ -419,7 +392,6 @@ class KalmanVAE(nn.Module):
                 a_sequence[:,t,:] = a_t.squeeze(1)
 
             pred_seq = self._decode(a_sequence).reshape(B,pred_len,C,H,W)
-        # print("Prediction Size", pred_seq.size())
         
         return pred_seq, a_sequence, z_sequence
 
@@ -539,7 +511,29 @@ class KalmanVAE(nn.Module):
 
         return (mu_filt, Sigma_filt), (mu_pred, Sigma_pred)
 
+    def calc_pred_mse(self, input, target):
+        """ Calculate MSE between prediction and ground truth. 
 
+        Arguments: 
+            input: Dim [B X T X N X H X W]
+            target: Dim [B X T X N X H X W]
+
+        Returns: 
+            avg_mse[float]: Pixel-wise MSE between input and target, 
+                            averaged acrossed all time frames 
+            mse_over_time[list]: MSE for each time step 
+        """ 
+        calc_mse = nn.MSELoss(reduction = 'mean') # pixel-wise MSE 
+        pred_seq, *_ = self.predict(input, input.size(1)) # predict length of input 
+        
+        mse_over_time = []
+
+        for t in range(pred_seq.size(1)): 
+            mse_over_time.append(calc_mse(pred_seq[:,t], target[:,t]).item())
+
+        avg_mse = np.mean(mse_over_time)
+
+        return avg_mse, mse_over_time
 
 if __name__ == "__main__": 
     parser = argparse.ArgumentParser()

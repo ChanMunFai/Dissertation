@@ -56,7 +56,7 @@ class ELBO():
         self.mu_z0 = (torch.zeros(self.z_dim)).double().to(self.device)
         self.sigma_z0 = (20*torch.eye(self.z_dim)).double().to(self.device)
 
-    def compute_loss(self): 
+    def compute_loss(self, print_loss = False): 
         """
         Instead of using beta as in Beta-VAE, we use a scale parameter on the 
         recon_loss. 
@@ -92,22 +92,22 @@ class ELBO():
         a_cond_ll = self.compute_a_conditional_loglikelihood() # log p(a_t| z_t)
 
         elbo_kf = a_cond_ll + z_cond_ll - z_marginal_ll
-        
-        print("=======> ELBO calculator")
-
-        print("log p(zt | zt-1) is", z_cond_ll.item())
-        print("log p(a_t| z_t) is ", a_cond_ll.item())
-        print("log q(z) is ", z_marginal_ll.item())
-        print("log q(a) is ", latent_ll.item())
-        
-        print("elbo kf is", elbo_kf.item())
-
         kld = latent_ll - elbo_kf
-        print("KLD is", kld.item())
-        print("NLL is", recon_loss.item())
-
         loss = self.scale * recon_loss + latent_ll - elbo_kf
-        print("loss is", loss)
+        
+        if print_loss == True: 
+            print("=======> ELBO calculator")
+
+            print("log p(zt | zt-1) is", z_cond_ll.item())
+            print("log p(a_t| z_t) is ", a_cond_ll.item())
+            print("log q(z) is ", z_marginal_ll.item())
+            print("log q(a) is ", latent_ll.item())
+            
+            print("elbo kf is", elbo_kf.item())
+
+            print("KLD is", kld.item())
+            print("NLL is", recon_loss.item())
+            print("loss is", loss)
 
         # Calculate MSE for tracking 
         mse_loss = self.compute_reconstruction_loss(mode = "mse")
@@ -220,7 +220,7 @@ class ELBO():
         """ Calculate q(zt|zt-1)
         """
         decoder_z0 = MultivariateNormal(self.mu_z0, scale_tril=torch.linalg.cholesky(self.sigma_z0))
-        decoder_z = MultivariateNormal(torch.zeros(4).to(self.device), scale_tril=torch.linalg.cholesky(self.Q))
+        decoder_z = MultivariateNormal(torch.zeros(self.z_dim).to(self.device), scale_tril=torch.linalg.cholesky(self.Q))
         
         loss_z0 = decoder_z0.log_prob(self.z_sample[:,0]).mean() 
         loss_zt_ztminus1 = decoder_z.log_prob((self.z_sample[:, 1:, :] - self.z_next[:,:-1, :])).mean(dim=0).sum().to(self.device) # averaged across batches, summed over time

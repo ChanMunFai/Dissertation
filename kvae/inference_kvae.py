@@ -18,8 +18,8 @@ def plot_predictions(x, target, pred_len, plot_len = None):
     print("Size of Predictions:", x_predicted.size())
     
     for batch_item, i in enumerate(x_predicted):
-        output_dir_pred = f"results/{args.dataset}/KVAE/attempt6/predictions/"
-        output_dir_gt = f"results/{args.dataset}/KVAE/attempt6/ground_truth/"
+        output_dir_pred = f"results/{args.dataset}/KVAE/{args.subdirectory}/predictions/"
+        output_dir_gt = f"results/{args.dataset}/KVAE/{args.subdirectory}/ground_truth/"
         if not os.path.exists(output_dir_pred):
             os.makedirs(output_dir_pred)
         if not os.path.exists(output_dir_gt):
@@ -64,9 +64,9 @@ def plot_reconstructions(x, plot_len, reconstruct_kalman = True):
     
     for batch_item, i  in enumerate(x_reconstructed):
         if reconstruct_kalman == False: 
-            output_dir = f"results/{args.dataset}/KVAE/attempt6/reconstructions/"
+            output_dir = f"results/{args.dataset}/KVAE/{args.subdirectory}/reconstructions/"
         else: 
-            output_dir = f"results/{args.dataset}/KVAE/attempt6/reconstructions_kf/"
+            output_dir = f"results/{args.dataset}/KVAE/{args.subdirectory}/reconstructions_kf/"
         
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -99,20 +99,30 @@ def plot_loss_over_time():
 
 
 if __name__ == "__main__": 
-    state_dict_path = "saves/BouncingBall/kvae/v4/scale=0.3/kvae_state_dict_scale=0.3_40.pth" 
+    # state_dict_path = "saves/BouncingBall_50/kvae/v1/scale=0.3/scheduler_step=10/kvae_state_dict_scale=0.3_89.pth" 
+    state_dict_path = "saves/BouncingBall_20/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', default = "BouncingBall", type = str, 
-                    help = "choose between [MovingMNIST, BouncingBall]")
+    parser.add_argument('--subdirectory', default="experiment_bb20", type=str)
+
+    parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
+                    help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
+
+    parser.add_argument('--model', default="KVAE", type=str)
+    parser.add_argument('--alpha', default="rnn", type=str, 
+                        help = "choose between [mlp, rnn]")
+    parser.add_argument('--lstm_layers', default=1, type=int, 
+                        help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
+
     parser.add_argument('--x_dim', default=1, type=int)
     parser.add_argument('--a_dim', default=2, type=int)
     parser.add_argument('--z_dim', default=4, type=int)
     parser.add_argument('--K', default=3, type=int)
-    parser.add_argument('--scale', default=0.3, type=float)
+
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--device', default="cpu", type=str)
-    parser.add_argument('--alpha', default="rnn", type=str, 
-                    help = "choose between [mlp, rnn]")
+ 
+    parser.add_argument('--scale', default=0.3, type=float)
 
     args = parser.parse_args()
 
@@ -127,8 +137,15 @@ if __name__ == "__main__":
                     batch_size=args.batch_size,
                     shuffle=False)
 
-    elif args.dataset == "BouncingBall": 
-        train_set = BouncingBallDataLoader('dataset/bouncing_ball/v2/train')
+    elif args.dataset == "BouncingBall_20": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/20/train')
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+    elif args.dataset == "BouncingBall_50": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
                     batch_size=args.batch_size, 
@@ -143,27 +160,9 @@ if __name__ == "__main__":
     target = (target - target.min()) / (target.max() - target.min())
     target = torch.where(target > 0.5, 1.0, 0.0)
 
-    # with torch.no_grad():
-    #     kvae(data)
-    #     for name, param in kvae.named_parameters():
-    #         print(name) 
- 
-    # print(kvae.A.size()) # K X z_dim X z_dim 
-    # print(kvae.A) # different 
-    # print(kvae.C) # a bit similar but still different 
+    plot_predictions(data, target, pred_len = 50)  
 
-    # Model does not learn to use different weights to get different dynamics 
 
-    plot_predictions(data, target, pred_len = 20)  
-    # plot_reconstructions(data, 20, reconstruct_kalman = False)
-
-    # pred_seq, *_ = kvae.predict(data, pred_len = 50)
-    # print(pred_seq[0,0])
-
-    # print(data[0,0,0])
-    # reconstructed = kvae.reconstruct(data)
-    # print(reconstructed[0,0,0])
-    
 
 
 

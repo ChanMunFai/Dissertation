@@ -41,11 +41,11 @@ class KVAETrainer:
     
         if state_dict_path: 
             state_dict = torch.load(state_dict_path, map_location = self.args.device)
-            # logging.info(f"Loaded State Dict from {state_dict_path}.")
+            logging.info(f"Loaded State Dict from {state_dict_path}")
             
             self.model.load_state_dict(state_dict)
 
-    def train(self, train_loader):
+    def train(self, train_loader, val_loader):
         n_iterations = 0
         logging.info(f"Starting KVAE training for {self.args.epochs} epochs.")
 
@@ -61,13 +61,10 @@ class KVAETrainer:
         example_target = example_target[0].clone().to(self.args.device)
         example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
-
-        # columns_wandb = ["Ground Truth", "Predictions"]
-        # predictions_table = wandb.Table(columns = columns_wandb)
         
         for epoch in range(self.args.epochs):
 
-            if epoch == 1: # Otherwise train KVAE only 
+            if epoch == self.args.initial_epochs: # Otherwise train KVAE only 
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
                 self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
 
@@ -92,13 +89,6 @@ class KVAETrainer:
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip)
                 self.optimizer.step()
-
-                # forward pass
-                print(f"Loss: {loss}")
-                print(f"Reconstruction Loss: {recon_loss}") 
-                print(f"Latent Loglikelihood: {latent_ll}")
-                print(f"ELBO KF: {elbo_kf}")
-                print(f"MSE: {mse}")
 
                 metrics = {"train/train_loss": loss, 
                             "train/reconstruction_loss": recon_loss, 
@@ -137,16 +127,19 @@ class KVAETrainer:
             if epoch % self.args.save_every == 0:
                 self._save_model(epoch)
 
+                # Validation prediction accuracy 
+                self.predict_val(val_loader)
+
             if epoch % 5 == 0: 
                 if wandb_on: 
                     predictions, ground_truth = self._plot_predictions(example_data, example_target)
                     wandb.log({"Ground Truth": [ground_truth]})
                     wandb.log({"Predictions": [predictions]})
 
-                    plt.bar([1, 2, 3], averaged_weights)
+                    plt.bar(list(range(1, self.args.K +1)), averaged_weights)
                     wandb.log({"Averaged Weights": plt})
 
-            if epoch % 20 == 0 and epoch != 0: 
+            if epoch % self.args.scheduler_step == 0 and epoch != 0: 
                 self.scheduler.step() 
 
         logging.info("Finished training.")
@@ -155,7 +148,7 @@ class KVAETrainer:
         logging.info(f'Saved model. Final Checkpoint {final_checkpoint}')
 
     def _save_model(self, epoch):  
-        checkpoint_path = f'saves/{self.args.dataset}/kvae/{self.args.subdirectory}/scale={self.args.scale}/'
+        checkpoint_path = f'saves/{self.args.dataset}/kvae/{self.args.subdirectory}/scale={self.args.scale}/scheduler_step={self.args.scheduler_step}/'
 
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
@@ -169,7 +162,7 @@ class KVAETrainer:
         return checkpoint_name
 
     def _plot_predictions(self, input, target):
-        predicted, _, _ = self.model.predict(input, 20)
+        predicted, _, _ = self.model.predict(input, target.size(1))
         predicted = predicted.squeeze(0)
         target = target.squeeze(0)
         predicted_frames = torchvision.utils.make_grid(predicted,predicted.size(0))
@@ -179,15 +172,56 @@ class KVAETrainer:
 
         return predicted_wandb, ground_truth_wandb
 
+    def predict_val(self, val_loader): 
+        val_mse = 0
+
+        for data, targets in val_loader:
+            data = data.to(self.args.device)
+            data = (data - data.min()) / (data.max() - data.min())
+            data = torch.where(data > 0.5, 1.0, 0.0)
+
+            targets = targets.to(self.args.device)
+            targets = (targets - targets.min()) / (targets.max() - targets.min())
+            targets = torch.where(targets > 0.5, 1.0, 0.0)  
+
+            # Print out MSE accuracy 
+            avg_mse, _ = self.model.calc_pred_mse(data, targets)
+            val_mse += avg_mse
+
+        val_mse = val_mse/len(val_loader)
+        print("====> Validation MSE", val_mse)
+
+        if wandb_on: 
+            wandb.log({"Validation Predictive MSE": val_mse})
+
+        # Plot example for wandb 
+        example_data, example_target = next(iter(val_loader))
+    
+        example_data = example_data[0].clone().to(self.args.device)
+        example_data = (example_data - example_data.min()) / (example_data.max() - example_data.min())
+        example_data = torch.where(example_data > 0.5, 1.0, 0.0).unsqueeze(0)
+
+        example_target = example_target[0].clone().to(self.args.device)
+        example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
+        example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
+
+        if wandb_on: 
+            predictions_val, ground_truth_val = self._plot_predictions(example_data, example_target)
+            wandb.log({"Ground Truth Val": [ground_truth_val]})
+            wandb.log({"Predicted Val": [predictions_val]})
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "BouncingBall", type = str, 
-                    help = "choose between [MovingMNIST, BouncingBall]")
+parser.add_argument('--dataset', default = "MovingMNIST", type = str, 
+                    help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
 parser.add_argument('--epochs', default=1, type=int)
-parser.add_argument('--subdirectory', default="v5", type=str)
+parser.add_argument('--subdirectory', default="testing", type=str)
+
 parser.add_argument('--model', default="KVAE", type=str)
 parser.add_argument('--alpha', default="rnn", type=str, 
                     help = "choose between [mlp, rnn]")
+parser.add_argument('--lstm_layers', default=1, type=int, 
+                    help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
 
 parser.add_argument('--x_dim', default=1, type=int)
 parser.add_argument('--a_dim', default=2, type=int)
@@ -197,10 +231,15 @@ parser.add_argument('--K', default=3, type=int)
 parser.add_argument('--clip', default=150, type=int)
 parser.add_argument('--scale', default=0.3, type=float)
 
-parser.add_argument('--save_every', default=10, type=int) 
-parser.add_argument('--learning_rate', default=0.007, type=float)
 parser.add_argument('--batch_size', default=1, type=int)
-parser.add_argument('--wandb_on', default=True, type=str)
+parser.add_argument('--learning_rate', default=0.007, type=float)
+parser.add_argument('--initial_epochs', default=1, type=int, 
+                    help = "Number of epochs to train KVAE without dynamics parameter net")
+parser.add_argument('--scheduler_step', default=82, type=int, 
+                    help = 'number of steps for scheduler. choose a number greater than epochs to have constant LR.')
+parser.add_argument('--save_every', default=10, type=int) 
+
+parser.add_argument('--wandb_on', default=None, type=str)
 
 def main():
     seed = 128
@@ -210,7 +249,7 @@ def main():
     global wandb_on 
     wandb_on = args.wandb_on 
     if wandb_on: 
-        wandb.init(project="KVAE_bouncing_ball")
+        wandb.init(project=f"New_KVAE_{args.dataset}")
 
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
@@ -218,14 +257,14 @@ def main():
         args.device = torch.device('cpu')
 
     if args.dataset == "MovingMNIST": 
-        # state_dict_path = "saves/MovingMNIST/kvae/v3/finetuned1/scale=0.2/kvae_state_dict_scale=0.2_99.pth"
         state_dict_path = None 
-    elif args.dataset == "BouncingBall": 
-        # state_dict_path = "saves/BouncingBall/kvae/v2/scale=0.3/kvae_state_dict_scale=0.3_30.pth" 
+    elif args.dataset == "BouncingBall_20": 
+        state_dict_path = None 
+    elif args.dataset == "BouncingBall_50": 
         state_dict_path = None 
        
     # set up logging
-    log_fname = f'{args.model}_scale={args.scale}_{args.epochs}.log'
+    log_fname = f'{args.model}_scale={args.scale}_steps={args.scheduler_step}_epochs={args.epochs}.log'
     log_dir = f"logs/{args.dataset}/{args.model}/{args.subdirectory}/"
     log_path = log_dir + log_fname
     if not os.path.isdir(log_dir):
@@ -242,17 +281,43 @@ def main():
                     dataset=train_set,
                     batch_size=args.batch_size,
                     shuffle=True)
-    elif args.dataset == "BouncingBall": 
-        train_set = BouncingBallDataLoader('dataset/bouncing_ball/train')
+
+        val_set = MovingMNIST(root='dataset/mnist', train=False, download=True)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set,
+                    batch_size=args.batch_size,
+                    shuffle=True)
+
+    elif args.dataset == "BouncingBall_20": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/20/train')
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = BouncingBallDataLoader('dataset/bouncing_ball/20/val')
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+    elif args.dataset == "BouncingBall_50": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = BouncingBallDataLoader('dataset/bouncing_ball/50/val')
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
                     batch_size=args.batch_size, 
                     shuffle=True)
     else: 
         raise NotImplementedError
 
     trainer = KVAETrainer(state_dict_path= state_dict_path, args=args)
-    trainer.train(train_loader)
+    trainer.train(train_loader, val_loader)
 
 if __name__ == "__main__":
     main()
