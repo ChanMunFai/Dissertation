@@ -99,11 +99,12 @@ def plot_loss_over_time():
 
 
 if __name__ == "__main__": 
-    # state_dict_path = "saves/BouncingBall_50/kvae/v1/scale=0.3/scheduler_step=10/kvae_state_dict_scale=0.3_89.pth" 
-    state_dict_path = "saves/BouncingBall_20/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
+    # state_dict_path = "saves/BouncingBall_50/kvae/v2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth" 
+    # state_dict_path = "saves/BouncingBall_20/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
+    state_dict_path = "saves/BouncingBall_50/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--subdirectory', default="experiment_bb20", type=str)
+    parser.add_argument('--subdirectory', default="experiment_1", type=str)
 
     parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
                     help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
@@ -142,14 +143,14 @@ if __name__ == "__main__":
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
                     batch_size=args.batch_size, 
-                    shuffle=True)
+                    shuffle=False)
 
     elif args.dataset == "BouncingBall_50": 
         train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
                     batch_size=args.batch_size, 
-                    shuffle=True)
+                    shuffle=False)
     
     data, target = next(iter(train_loader))
     data = data.to(args.device)

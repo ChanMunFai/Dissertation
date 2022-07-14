@@ -1,0 +1,54 @@
+VRNN(
+  (mse_loss): MSELoss()
+  (embed): Conv(
+    (main): Sequential(
+      (0): Conv2d(1, 32, kernel_size=(4, 4), stride=(2, 2), bias=False)
+      (1): ReLU()
+      (2): Conv2d(32, 64, kernel_size=(4, 4), stride=(2, 2))
+      (3): ReLU()
+      (4): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2))
+      (5): ReLU()
+      (6): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2))
+      (7): ReLU()
+      (8): Flatten(start_dim=1, end_dim=-1)
+    )
+  )
+  (enc): Sequential(
+    (0): Linear(in_features=2048, out_features=1024, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=1024, out_features=1024, bias=True)
+    (3): ReLU()
+  )
+  (enc_mean): Linear(in_features=1024, out_features=32, bias=True)
+  (enc_std): Sequential(
+    (0): Linear(in_features=1024, out_features=32, bias=True)
+    (1): Softplus(beta=1, threshold=20)
+  )
+  (phi_z): Sequential(
+    (0): Linear(in_features=32, out_features=1024, bias=True)
+    (1): ReLU()
+  )
+  (dec): Deconv(
+    (main): Sequential(
+      (0): UnFlatten()
+      (1): ConvTranspose2d(2048, 128, kernel_size=(5, 5), stride=(2, 2))
+      (2): ReLU()
+      (3): ConvTranspose2d(128, 64, kernel_size=(5, 5), stride=(2, 2))
+      (4): ReLU()
+      (5): ConvTranspose2d(64, 32, kernel_size=(6, 6), stride=(2, 2))
+      (6): ReLU()
+      (7): ConvTranspose2d(32, 1, kernel_size=(6, 6), stride=(2, 2))
+      (8): Sigmoid()
+    )
+  )
+  (prior): Sequential(
+    (0): Linear(in_features=1024, out_features=1024, bias=True)
+    (1): ReLU()
+  )
+  (prior_mean): Linear(in_features=1024, out_features=32, bias=True)
+  (prior_std): Sequential(
+    (0): Linear(in_features=1024, out_features=32, bias=True)
+    (1): Softplus(beta=1, threshold=20)
+  )
+  (rnn): GRU(2048, 1024, bias=False)
+)

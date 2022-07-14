@@ -86,6 +86,11 @@ class KVAETrainer:
                 #forward + backward + optimize
                 self.optimizer.zero_grad()
                 loss, recon_loss, latent_ll, elbo_kf, mse, averaged_weights, var_diff = self.model(data)
+
+                # Only train encoder-decoder 
+                if self.args.train_reconstruction == True: 
+                    loss = recon_loss
+
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip)
                 self.optimizer.step()
@@ -238,6 +243,8 @@ parser.add_argument('--initial_epochs', default=1, type=int,
 parser.add_argument('--scheduler_step', default=82, type=int, 
                     help = 'number of steps for scheduler. choose a number greater than epochs to have constant LR.')
 parser.add_argument('--save_every', default=10, type=int) 
+parser.add_argument('--train_reconstruction', default=True, type=str, 
+                    help = "Trains using reconstruction loss only if True.") 
 
 parser.add_argument('--wandb_on', default=None, type=str)
 

@@ -322,5 +322,7 @@ if __name__ == "__main__":
     vrnn = VRNN(64, 1024, 32, 1)
     print("Number of parameters in my Implementation of VRNN", count_parameters(vrnn))
 
+    print(vrnn)
+
     
 

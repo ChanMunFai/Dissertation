@@ -30,5 +30,8 @@ cd /vol/bitbucket/mc821/Dissertation
 
 ### MovingMNIST 
 dset=MovingMNIST
-python main_kvae.py --subdirectory=v1 --scale=0.3 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --z_dim=5 --K=7 --wandb_on=True
-python main_kvae.py --subdirectory=v1 --scale=0.3 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=10 --z_dim=5 --K=7 --wandb_on=True
+# python main_kvae.py --subdirectory=v2 --scale=1000.0 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --z_dim=5 --K=7 --wandb_on=True
+# python main_kvae.py --subdirectory=v1 --scale=0.3 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=10 --z_dim=5 --K=7 --wandb_on=True
+
+### Train reconstruction only 
+python main_kvae.py --subdirectory=v3 --train_reconstruction=True --scale=1 --epoch=40 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=0 --scheduler_step=5 --z_dim=5 --K=7 --wandb_on=True

@@ -460,10 +460,12 @@ if __name__ == '__main__':
     config = parse_args()
 
     vrnn = Model(img_ch = 1, n_ctx = 10)
-    print(vrnn)
+    # print(vrnn)
     # summary(vrnn)
-    print("Number of parameters in VRNN", count_parameters(vrnn)) # 307929273
+    # print("Number of parameters in VRNN", count_parameters(vrnn)) # 307929273
 
-    # data = torch.rand(32, 10, 1, 64, 64) # MovingMNIST dimensions 
+    data = torch.rand(32, 10, 1, 64, 64) # MovingMNIST dimensions 
+    embeddings = vrnn.get_emb(data)
+    print(embeddings.size())
     # vrnn.forward(data, config, use_prior = True)
 
