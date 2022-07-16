@@ -255,6 +255,8 @@ def plot_losses_over_time():
     plt.legend(loc="upper left")
 
     output_dir = "plots/SV2P/"
+    if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
     plt.savefig(output_dir + f"SV2P_loss_over_time.jpeg")
     plt.close('all')
 

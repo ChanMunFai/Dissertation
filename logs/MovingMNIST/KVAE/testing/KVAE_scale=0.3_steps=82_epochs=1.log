@@ -1,3 +1,4 @@
-INFO:root:Namespace(K=3, a_dim=2, alpha='rnn', batch_size=1, clip=150, dataset='MovingMNIST', device=device(type='cpu'), epochs=1, initial_epochs=1, learning_rate=0.007, lstm_layers=1, model='KVAE', save_every=10, scale=0.3, scheduler_step=82, subdirectory='testing', train_reconstruction=True, wandb_on=None, x_dim=1, z_dim=4)
+INFO:root:Namespace(K=7, a_dim=2, alpha='rnn', batch_size=1, clip=150, dataset='MovingMNIST', device=device(type='cpu'), epochs=1, initial_epochs=1, learning_rate=0.007, lstm_layers=1, model='KVAE', save_every=10, scale=0.3, scheduler_step=82, subdirectory='testing', train_reconstruction=True, wandb_on=None, x_dim=1, z_dim=5)
+INFO:root:Loaded State Dict from saves/MovingMNIST/kvae/v3/scale=1.0/scheduler_step=5/kvae_state_dict_scale=1.0_39.pth
 INFO:root:Starting KVAE training for 1 epochs.
 INFO:root:Train Loss, Reconstruction Loss, log q(a), ELBO_KF, MSE

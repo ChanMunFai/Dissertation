@@ -32,9 +32,11 @@ class KVAETrainer:
         # Change out encoder and decoder 
         self.model = KalmanVAE(args = self.args).to(self.args.device)
         
-        
         parameters = list(self.model.encoder.parameters()) + list(self.model.decoder.parameters()) \
                     + [self.model.a1, self.model.A, self.model.C]
+
+        if self.args.train_reconstruction == True: 
+            parameters = [self.model.encoder.parameters() + self.model.decoder.parameters()]
         
         self.optimizer = torch.optim.Adam(parameters, lr=self.args.learning_rate)
         self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
@@ -64,7 +66,7 @@ class KVAETrainer:
         
         for epoch in range(self.args.epochs):
 
-            if epoch == self.args.initial_epochs: # Otherwise train KVAE only 
+            if epoch == self.args.initial_epochs and self.args.train_reconstruction == False: # Otherwise train KVAE only 
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
                 self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
 
@@ -87,11 +89,11 @@ class KVAETrainer:
                 self.optimizer.zero_grad()
                 loss, recon_loss, latent_ll, elbo_kf, mse, averaged_weights, var_diff = self.model(data)
 
-                # Only train encoder-decoder 
-                if self.args.train_reconstruction == True: 
-                    loss = recon_loss
-
-                loss.backward()
+                if self.args.train_reconstruction == True: # Only train encoder-decoder 
+                    recon_loss.backward()
+                else: 
+                    loss.backward()
+                
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip)
                 self.optimizer.step()
 
@@ -230,8 +232,8 @@ parser.add_argument('--lstm_layers', default=1, type=int,
 
 parser.add_argument('--x_dim', default=1, type=int)
 parser.add_argument('--a_dim', default=2, type=int)
-parser.add_argument('--z_dim', default=4, type=int)
-parser.add_argument('--K', default=3, type=int)
+parser.add_argument('--z_dim', default=5, type=int)
+parser.add_argument('--K', default=7, type=int)
 
 parser.add_argument('--clip', default=150, type=int)
 parser.add_argument('--scale', default=0.3, type=float)
@@ -264,7 +266,7 @@ def main():
         args.device = torch.device('cpu')
 
     if args.dataset == "MovingMNIST": 
-        state_dict_path = None 
+        state_dict_path = "saves/MovingMNIST/kvae/v3/scale=1.0/scheduler_step=5/kvae_state_dict_scale=1.0_39.pth" 
     elif args.dataset == "BouncingBall_20": 
         state_dict_path = None 
     elif args.dataset == "BouncingBall_50": 

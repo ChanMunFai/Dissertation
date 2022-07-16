@@ -351,7 +351,7 @@ class KalmanVAE(nn.Module):
             
         return x_hat 
 
-    def predict(self, input, pred_len):
+    def predict(self, input, pred_len, return_weights = False):
         """ Predicts a sequence of length pred_len given input. 
         """
         ### Seen data
@@ -362,6 +362,7 @@ class KalmanVAE(nn.Module):
             filtered, A_t, C_t, weights = self._kalman_posterior(a_sample, filter_only = True) 
             
             # print("Weights for Seen data:", weights)
+            # print(weights.size())
 
             mu_z, sigma_z = filtered  
             z_dist = MultivariateNormal(mu_z.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z))
@@ -373,12 +374,15 @@ class KalmanVAE(nn.Module):
             a_t = a_sample[:, -1, :].unsqueeze(1) # BS X T X a_dim
             z_t = z_sample[:, -1, :].unsqueeze(1).to(torch.float32) # BS X T X z_dim
 
+            pred_weights = torch.zeros((B, pred_len, self.K), device = self.device)
+
             for t in range(pred_len):
                 hidden_state, cell_state = self.state_dyn_net 
 
                 dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
                 dyn_emb = self.alpha_out(dyn_emb)
                 weights = dyn_emb.softmax(-1).squeeze(1)
+                pred_weights[:,t] = weights
                 
                 A_t = torch.matmul(weights, self.A.reshape(self.K,-1)).reshape(B,-1,self.z_dim,self.z_dim) # only for 1 time step 
                 C_t = torch.matmul(weights, self.C.reshape(self.K,-1)).reshape(B,-1,self.a_dim,self.z_dim)
@@ -392,6 +396,9 @@ class KalmanVAE(nn.Module):
                 a_sequence[:,t,:] = a_t.squeeze(1)
 
             pred_seq = self._decode(a_sequence).reshape(B,pred_len,C,H,W)
+
+        if return_weights == True: 
+            return pred_seq, a_sequence, z_sequence, pred_weights
         
         return pred_seq, a_sequence, z_sequence
 
