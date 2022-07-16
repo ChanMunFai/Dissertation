@@ -3,8 +3,8 @@ import math
 import logging
 import argparse
 from pprint import pprint
-
 from tqdm import tqdm
+import numpy as np 
 
 import torch
 import torch.nn as nn
@@ -36,7 +36,7 @@ class KVAETrainer:
                     + [self.model.a1, self.model.A, self.model.C]
 
         if self.args.train_reconstruction == True: 
-            parameters = [self.model.encoder.parameters() + self.model.decoder.parameters()]
+            parameters = [self.model.encoder.parameters(), self.model.decoder.parameters()]
         
         self.optimizer = torch.optim.Adam(parameters, lr=self.args.learning_rate)
         self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
@@ -64,6 +64,9 @@ class KVAETrainer:
         example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
         
+        ### Visualise weights 
+        self.visualise_weights()
+
         for epoch in range(self.args.epochs):
 
             if epoch == self.args.initial_epochs and self.args.train_reconstruction == False: # Otherwise train KVAE only 
@@ -143,8 +146,14 @@ class KVAETrainer:
                     wandb.log({"Ground Truth": [ground_truth]})
                     wandb.log({"Predictions": [predictions]})
 
+                    reconstructions, original = self._plot_reconstructions(example_data)
+                    wandb.log({"Original Video": [original]})
+                    wandb.log({"Reconstructions": [reconstructions]})
+
                     plt.bar(list(range(1, self.args.K +1)), averaged_weights)
                     wandb.log({"Averaged Weights": plt})
+
+                    self.visualise_weights()
 
             if epoch % self.args.scheduler_step == 0 and epoch != 0: 
                 self.scheduler.step() 
@@ -178,6 +187,17 @@ class KVAETrainer:
         ground_truth_wandb = wandb.Image(ground_truth_frames)
 
         return predicted_wandb, ground_truth_wandb
+
+    def _plot_reconstructions(self,target): 
+        reconstructed = self.model.reconstruct(target)
+        reconstructed = reconstructed.squeeze(0)
+        target = target.squeeze(0)
+        reconstructed_frames = torchvision.utils.make_grid(reconstructed,reconstructed.size(0))
+        ground_truth_frames = torchvision.utils.make_grid(target,target.size(0))
+        reconstructed_wandb = wandb.Image(reconstructed_frames)
+        ground_truth_wandb = wandb.Image(ground_truth_frames)
+
+        return reconstructed_wandb, ground_truth_wandb
 
     def predict_val(self, val_loader): 
         val_mse = 0
@@ -217,9 +237,41 @@ class KVAETrainer:
             wandb.log({"Ground Truth Val": [ground_truth_val]})
             wandb.log({"Predicted Val": [predictions_val]})
 
+    def visualise_weights(self): 
+        """ Visualise the contours of when weights are more active. 
 
+        Green - more active 
+        Blue - less active 
+        """
+        if self.args.a_dim !=2: 
+            return  
+
+        N = 100
+        xlist = np.linspace(-30, 30, N)
+        ylist = np.linspace(-30, 30, N)
+        X, Y = np.meshgrid(xlist, ylist)
+        X_t = torch.from_numpy(X).unsqueeze(-1).to(self.args.device)
+        Y_t = torch.from_numpy(Y).unsqueeze(-1).to(self.args.device)
+        dom = torch.cat([X_t,Y_t], dim=-1).float()
+        dom = dom.to(self.args.device)
+        dyn_emb, _ = self.model.parameter_net(dom) 
+        dyn_emb = self.model.alpha_out(dyn_emb.reshape(-1,50))
+        Z = dyn_emb.softmax(-1).reshape(N,N,-1)
+        Z = Z.cpu().detach().numpy()
+
+        fig = plt.figure(figsize=(12,4))
+        for i in range(self.args.K):
+            ax = plt.subplot(1,3,i+1)
+            cp = ax.contourf(X, Y, Z[:,:,i])
+
+        fig = wandb.Image(fig)
+
+        if wandb_on: 
+            wandb.log({"Weights Contours": fig})
+
+            
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "MovingMNIST", type = str, 
+parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
                     help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
@@ -232,8 +284,8 @@ parser.add_argument('--lstm_layers', default=1, type=int,
 
 parser.add_argument('--x_dim', default=1, type=int)
 parser.add_argument('--a_dim', default=2, type=int)
-parser.add_argument('--z_dim', default=5, type=int)
-parser.add_argument('--K', default=7, type=int)
+parser.add_argument('--z_dim', default=4, type=int)
+parser.add_argument('--K', default=3, type=int)
 
 parser.add_argument('--clip', default=150, type=int)
 parser.add_argument('--scale', default=0.3, type=float)
@@ -245,10 +297,10 @@ parser.add_argument('--initial_epochs', default=1, type=int,
 parser.add_argument('--scheduler_step', default=82, type=int, 
                     help = 'number of steps for scheduler. choose a number greater than epochs to have constant LR.')
 parser.add_argument('--save_every', default=10, type=int) 
-parser.add_argument('--train_reconstruction', default=True, type=str, 
+parser.add_argument('--train_reconstruction', default=False, type=str, 
                     help = "Trains using reconstruction loss only if True.") 
 
-parser.add_argument('--wandb_on', default=None, type=str)
+parser.add_argument('--wandb_on', default=True, type=str)
 
 def main():
     seed = 128
@@ -258,7 +310,10 @@ def main():
     global wandb_on 
     wandb_on = args.wandb_on 
     if wandb_on: 
-        wandb.init(project=f"New_KVAE_{args.dataset}")
+        if args.subdirectory == "testing":
+            wandb.init(project="Testing")
+        else: 
+            wandb.init(project=f"New_KVAE_{args.dataset}")
 
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
