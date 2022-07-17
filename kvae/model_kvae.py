@@ -324,33 +324,6 @@ class KalmanVAE(nn.Module):
 
         return x_hat 
 
-    def reconstruct_kalman(self, input): 
-        """ TO BE IGNORED 
-        
-        Use the Kalman filter to generate a_t hat, 
-        which is then decoded into x_hat. 
-
-        """
-        (B, T, C, H, W) = input.size()
-
-        with torch.no_grad(): 
-            a_sample, _, _ = self._encode(input) 
-            smoothed, A_t, C_t, weights = self._kalman_posterior(a_sample) 
-            mu_z_smooth, sigma_z_smooth = smoothed  
-            z_dist = MultivariateNormal(mu_z_smooth.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z_smooth))
-            z_sample = z_dist.sample()
-            z_sample = z_sample.double()
-
-            elbo_calculator = ELBO(input, input, input, 
-                        a_sample, a_sample, a_sample, 
-                        smoothed, A_t, C_t, self.scale)
-            a_pred, _ = elbo_calculator.decode_latent(z_sample, A_t, C_t)        
-            x_hat = self._decode(a_pred.to(torch.float32)).reshape(B,T,C,H,W)
-
-            averaged_weights = self._average_weights(weights)
-            
-        return x_hat 
-
     def predict(self, input, pred_len, return_weights = False):
         """ Predicts a sequence of length pred_len given input. 
         """
@@ -377,10 +350,14 @@ class KalmanVAE(nn.Module):
             pred_weights = torch.zeros((B, pred_len, self.K), device = self.device)
 
             for t in range(pred_len):
-                hidden_state, cell_state = self.state_dyn_net 
+                if self.alpha == "rnn": 
+                    hidden_state, cell_state = self.state_dyn_net
+                    dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
+                    dyn_emb = self.alpha_out(dyn_emb)
+                    
+                elif self.alpha == "mlp": 
+                    dyn_emb = self.parameter_net(joint_obs.reshape(B*T, -1))
 
-                dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
-                dyn_emb = self.alpha_out(dyn_emb)
                 weights = dyn_emb.softmax(-1).squeeze(1)
                 pred_weights[:,t] = weights
                 
