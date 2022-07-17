@@ -18,17 +18,17 @@ from kvae.model_kvae import KalmanVAE
 from data.MovingMNIST import MovingMNIST
 from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
-# state_dict_path = "saves/BouncingBall_50/kvae/v2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth" 
+state_dict_path = "saves/BouncingBall_50/kvae/v2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth" 
 # state_dict_path = "saves/BouncingBall_20/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
-state_dict_path = "saves/BouncingBall_50/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth"
+# state_dict_path = "saves/BouncingBall_50/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth"
 parser = argparse.ArgumentParser()
-parser.add_argument('--subdirectory', default="experiment_1", type=str)
+parser.add_argument('--subdirectory', default="experiment_2", type=str)
 parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
                 help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
 parser.add_argument('--model', default="KVAE", type=str)
 parser.add_argument('--alpha', default="rnn", type=str, 
                     help = "choose between [mlp, rnn]")
-parser.add_argument('--lstm_layers', default=1, type=int, 
+parser.add_argument('--lstm_layers', default=2, type=int, 
                     help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
 parser.add_argument('--x_dim', default=1, type=int)
 parser.add_argument('--a_dim', default=2, type=int)
@@ -100,9 +100,14 @@ x_predicted, _, _, weights = kvae.predict(example_data, pred_len = 50, return_we
 weights_pd = pd.DataFrame(weights[0].numpy())
 weights_pd.columns = [0, 1, 2]
 
+filepath = f'plots/{args.dataset}/{args.model}/{args.subdirectory}/'
+if not os.path.isdir(filepath):
+    os.makedirs(filepath)
+
+
 bcr.bar_chart_race(
     df=weights_pd,
-    filename='plots/weights_over_time.mp4',
+    filename = filepath + 'weights_over_time.mp4',
     orientation='h',
     sort='desc',
     n_bars=3,

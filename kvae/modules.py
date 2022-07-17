@@ -28,7 +28,7 @@ class KvaeEncoder(nn.Module):
         if self.input_size != 32 and self.input_size != 64: 
             raise NotImplementedError
 
-        self.a_dim = 2
+        self.a_dim = a_dim
         self.encode = nn.Sequential(
                 nn.Conv2d(input_channels, 32, 3, stride = 2), 
                 nn.ReLU(), 

@@ -64,9 +64,6 @@ class KVAETrainer:
         example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
         
-        ### Visualise weights 
-        self.visualise_weights()
-
         for epoch in range(self.args.epochs):
 
             if epoch == self.args.initial_epochs and self.args.train_reconstruction == False: # Otherwise train KVAE only 
@@ -150,10 +147,11 @@ class KVAETrainer:
                     wandb.log({"Original Video": [original]})
                     wandb.log({"Reconstructions": [reconstructions]})
 
-                    plt.bar(list(range(1, self.args.K +1)), averaged_weights)
-                    wandb.log({"Averaged Weights": plt})
+                    # plt.bar(list(range(1, self.args.K +1)), averaged_weights)
+                    # wandb.log({"Averaged Weights": plt})
 
-                    self.visualise_weights()
+                    if self.args.alpha == "mlp":
+                        self.visualise_weights()    
 
             if epoch % self.args.scheduler_step == 0 and epoch != 0: 
                 self.scheduler.step() 
@@ -271,7 +269,7 @@ class KVAETrainer:
 
             
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
+parser.add_argument('--dataset', default = "BouncingBall_20", type = str, 
                     help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
@@ -300,7 +298,7 @@ parser.add_argument('--save_every', default=10, type=int)
 parser.add_argument('--train_reconstruction', default=False, type=str, 
                     help = "Trains using reconstruction loss only if True.") 
 
-parser.add_argument('--wandb_on', default=True, type=str)
+parser.add_argument('--wandb_on', default=None, type=str)
 
 def main():
     seed = 128

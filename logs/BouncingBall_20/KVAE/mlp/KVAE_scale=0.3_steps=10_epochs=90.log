@@ -1,0 +1,4 @@
+INFO:root:Namespace(K=3, a_dim=2, alpha='mlp', batch_size=128, clip=150, dataset='BouncingBall_20', device=device(type='cuda'), epochs=90, initial_epochs=10, learning_rate=0.007, lstm_layers=1, model='KVAE', save_every=10, scale=0.3, scheduler_step=10, subdirectory='mlp', train_reconstruction=False, wandb_on='True', x_dim=1, z_dim=4)
+INFO:root:Starting KVAE training for 90 epochs.
+INFO:root:Train Loss, Reconstruction Loss, log q(a), ELBO_KF, MSE
+INFO:root:2095.49412453, 4570.21627769, 21.07529115, -703.35388582, 1271.29481989, 0.007

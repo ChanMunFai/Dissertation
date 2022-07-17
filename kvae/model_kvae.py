@@ -32,7 +32,7 @@ class KalmanVAE(nn.Module):
             self.decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 32).to(self.device)
 
         if self.alpha == "mlp": 
-            self.parameter_net = MLP(32, 50, self.K).to(self.device)
+            self.parameter_net = MLP(self.a_dim, 50, self.K).to(self.device)
         else:  
             self.parameter_net = nn.LSTM(self.a_dim, 50, self.lstm_layers, batch_first=True).to(self.device) 
             self.alpha_out = nn.Linear(50, self.K).to(self.device)
@@ -115,15 +115,15 @@ class KalmanVAE(nn.Module):
             # print("joint_obs shape", joint_obs.shape) # BS X T X a_dim
 
         if self.alpha == "mlp": 
-            # dyn_emb = (dyn_emb - dyn_emb.min()) / (dyn_emb.max() - dyn_emb.min()) 
+            # Join obs: BS * T X a_dim 
+            # parameter net: 
             dyn_emb = self.parameter_net(joint_obs.reshape(B*T, -1))
 
-        else: 
+        elif self.alpha == "rnn": 
             dyn_emb, self.state_dyn_net = self.parameter_net(joint_obs)
-            # print("dyn_emb shape", dyn_emb.size()) # BS X T X 50
-            # dyn_emb = (dyn_emb - dyn_emb.min()) / (dyn_emb.max() - dyn_emb.min()) # normalise them 
             dyn_emb = self.alpha_out(dyn_emb.reshape(B*T,50))
-            weights = dyn_emb.softmax(-1)
+        
+        weights = dyn_emb.softmax(-1)
         
         # print("Weights shape", weights.shape) # B*T X K 
         # print("A shape", self.A.shape) # K X z_dim X z_dim  
