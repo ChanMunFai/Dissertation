@@ -15,6 +15,39 @@ from kvae.model_kvae import KalmanVAE
 from data.MovingMNIST import MovingMNIST
 from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
+def load_dataset(dataset, batch_size): 
+    if dataset == "MovingMNIST": 
+        train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set,
+                    batch_size=batch_size,
+                    shuffle=False)
+
+    elif dataset == "BouncingBall_20": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/20/train')
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+
+    elif dataset == "BouncingBall_50": 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+    else: 
+        raise NotImplementedError
+
+    data, target = next(iter(train_loader))
+    data = (data - data.min()) / (data.max() - data.min())
+    data = torch.where(data > 0.5, 1.0, 0.0)
+    target = (target - target.min()) / (target.max() - target.min())
+    target = torch.where(target > 0.5, 1.0, 0.0)
+
+    return data, target 
+
+
 def load_kvae(Args): 
     args = Args()
     kvae = KalmanVAE(args = args).to(args.device)
@@ -27,7 +60,7 @@ def call_args(Args):
     args = Args()
     return args
 
-def load_dataset(dataset, batch_size): 
+def load_train_dataset(dataset, batch_size): 
     if dataset == "BouncingBall_50": 
         train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
         train_loader = torch.utils.data.DataLoader(
@@ -240,53 +273,102 @@ class Bonus_Args:
     scale = 0.3
     state_dict_path = "saves/BouncingBall_50/kvae/v3/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_89.pth"
 
+class Modified_ELBO_20_Args:
+    subdirectory = "experiment_mod_prior"
+    dataset = "BouncingBall_20"
+    model = 'KVAE'
+    alpha = "rnn"
+    lstm_layers = 1
+    x_dim = 1
+    a_dim = 2
+    z_dim = 4
+    K = 3
+    device = "cpu"
+    scale = 0.3
+    state_dict_path = "saves/BouncingBall_20/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
 
-args1 = Ex1_Args
-args2 = Ex2_Args
-args3 = Ex3_Args
-args_bb20 = Ex20_Args
-args_bonus = Bonus_Args
+if __name__ == "__main__": 
+    args1 = Ex1_Args
+    args2 = Ex2_Args
+    args3 = Ex3_Args
+    args_bb20 = Ex20_Args
+    args_bonus = Bonus_Args
+    args_bb20_mod = Modified_ELBO_20_Args
 
-data, target = load_dataset("BouncingBall_50", batch_size = 32)
+    # data, target = load_dataset("BouncingBall_50", batch_size = 32)
+    data, target = load_dataset("BouncingBall_20", batch_size = 32)
 
-### Plot predictions 
-plot_predictions(data, target, 50, args_bb20)
-plot_predictions_diff_colours(data, target, 50, args_bb20)
-plot_predictions_overlap(data, target, 50, args_bb20)
+    ### Plot predictions for Bouncing Ball 50 
+    # plot_predictions(data, target, 50, args_bb20)
+    # plot_predictions_diff_colours(data, target, 50, args_bb20)
+    # plot_predictions_overlap(data, target, 50, args_bb20)
 
-def plot_mse_bb50(): 
-    ### MSE over time 
-    mse_kvae1 = calc_model_losses_over_time(data, target, 50, args1)
-    mse_kvae2 = calc_model_losses_over_time(data, target, 50, args2)
-    mse_kvae3 = calc_model_losses_over_time(data, target, 50, args3)
-    mse_kvae_bb20 = calc_model_losses_over_time(data, target, 50, args_bb20)
-    mse_kvae_bonus = calc_model_losses_over_time(data, target, 50, args_bonus)
+    ### Plot predictions for Bouncing Ball 20 
+    plot_predictions(data, target, 20, args_bb20_mod)
+    plot_predictions_diff_colours(data, target, 20, args_bb20_mod)
+    plot_predictions_overlap(data, target, 20, args_bb20_mod)
 
-    mse_black = calc_black_losses_over_time(target)
-    mse_last_seen = calc_last_seen_losses_over_time(data, target)
 
-    ### Plotting 
-    plt.plot(mse_kvae1, label="KVAE 1 LSTM")
-    plt.plot(mse_kvae2, label="KVAE 2 LSTM")
-    plt.plot(mse_kvae3, label = "KVAE 3 LSTM")
-    plt.plot(mse_kvae_bb20, label="KVAE (20)")
-    plt.plot(mse_kvae_bonus, label="KVAE (Bonus)")
-    plt.plot(mse_black, label="Black")
-    plt.plot(mse_last_seen, label = "Last Seen Frame")
+    def plot_mse_bb50(): 
+        ### MSE over time 
+        mse_kvae1 = calc_model_losses_over_time(data, target, 50, args1)
+        mse_kvae2 = calc_model_losses_over_time(data, target, 50, args2)
+        mse_kvae3 = calc_model_losses_over_time(data, target, 50, args3)
+        mse_kvae_bb20 = calc_model_losses_over_time(data, target, 50, args_bb20)
+        mse_kvae_bonus = calc_model_losses_over_time(data, target, 50, args_bonus)
 
-    plt.title("MSE between ground truth and predicted frame over time")
-    plt.ylabel('MSE')
-    plt.xlabel('Time')
-    plt.xticks(np.arange(0, len(mse_black), 5))
-    plt.legend(loc="upper left")
+        mse_black = calc_black_losses_over_time(target)
+        mse_last_seen = calc_last_seen_losses_over_time(data, target)
 
-    output_dir = f"plots/BouncingBall_50/KVAE/"
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
-    plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
-    plt.close('all')
+        ### Plotting 
+        plt.plot(mse_kvae1, label="KVAE 1 LSTM")
+        plt.plot(mse_kvae2, label="KVAE 2 LSTM")
+        plt.plot(mse_kvae3, label = "KVAE 3 LSTM")
+        plt.plot(mse_kvae_bb20, label="KVAE (20)")
+        plt.plot(mse_kvae_bonus, label="KVAE (Bonus)")
+        plt.plot(mse_black, label="Black")
+        plt.plot(mse_last_seen, label = "Last Seen Frame")
 
-# plot_mse_bb50()
+        plt.title("MSE between ground truth and predicted frame over time")
+        plt.ylabel('MSE')
+        plt.xlabel('Time')
+        plt.xticks(np.arange(0, len(mse_black), 5))
+        plt.legend(loc="upper left")
+
+        output_dir = f"plots/BouncingBall_50/KVAE/"
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+        plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
+        plt.close('all')
+
+    def plot_mse_bb20(): 
+        ### MSE over time 
+        mse_kvae_1 = calc_model_losses_over_time(data, target, 50, args_bb20)
+        mse_kvae_mod = calc_model_losses_over_time(data, target, 50, args_bb20_mod)
+
+        mse_black = calc_black_losses_over_time(target)
+        mse_last_seen = calc_last_seen_losses_over_time(data, target)
+
+        ### Plotting 
+        plt.plot(mse_kvae_1, label="KVAE")
+        plt.plot(mse_kvae_mod, label="KVAE (Modified Prior)")
+        plt.plot(mse_black, label="Black")
+        plt.plot(mse_last_seen, label = "Last Seen Frame")
+
+        plt.title("MSE between ground truth and predicted frame over time")
+        plt.ylabel('MSE')
+        plt.xlabel('Time')
+        plt.xticks(np.arange(0, len(mse_black), 5))
+        plt.legend(loc="upper left")
+
+        output_dir = f"plots/BouncingBall_20/KVAE/"
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+        plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
+        plt.close('all')
+
+    # plot_mse_bb50()
+    plot_mse_bb20()
 
 
 
