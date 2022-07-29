@@ -18,6 +18,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 import matplotlib.pyplot as plt
 from kvae.model_kvae import KalmanVAE
+from kvae.model_kvae_mod import KalmanVAEMod
 from data.MovingMNIST import MovingMNIST
 from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
@@ -30,7 +31,10 @@ class KVAETrainer:
         print(self.args)
 
         # Change out encoder and decoder 
-        self.model = KalmanVAE(args = self.args).to(self.args.device)
+        if self.args.model == "KVAE": 
+            self.model = KalmanVAE(args = self.args).to(self.args.device)
+        elif self.args.model == "KVAE_mod": 
+            self.model = KalmanVAEMod(args = self.args).to(self.args.device)
         
         parameters = list(self.model.encoder.parameters()) + list(self.model.decoder.parameters()) \
                     + [self.model.a1, self.model.A, self.model.C]
@@ -139,8 +143,7 @@ class KVAETrainer:
 
             if epoch % 5 == 0: 
                 if wandb_on: 
-                    predictions, ground_truth = self._plot_predictions(example_data, example_target)
-                    wandb.log({"Ground Truth": [ground_truth]})
+                    predictions = self._plot_predictions(example_data, example_target)
                     wandb.log({"Predictions": [predictions]})
 
                     reconstructions, original = self._plot_reconstructions(example_data)
@@ -162,7 +165,8 @@ class KVAETrainer:
         logging.info(f'Saved model. Final Checkpoint {final_checkpoint}')
 
     def _save_model(self, epoch):  
-        checkpoint_path = f'saves/{self.args.dataset}/kvae/{self.args.subdirectory}/scale={self.args.scale}/scheduler_step={self.args.scheduler_step}/'
+        model_name = self.args.model.lower()
+        checkpoint_path = f'saves/{self.args.dataset}/{model_name}/{self.args.subdirectory}/scale={self.args.scale}/scheduler_step={self.args.scheduler_step}/'
 
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
@@ -179,12 +183,19 @@ class KVAETrainer:
         predicted, _, _ = self.model.predict(input, target.size(1))
         predicted = predicted.squeeze(0)
         target = target.squeeze(0)
-        predicted_frames = torchvision.utils.make_grid(predicted,predicted.size(0))
-        ground_truth_frames = torchvision.utils.make_grid(target,target.size(0))
-        predicted_wandb = wandb.Image(predicted_frames)
-        ground_truth_wandb = wandb.Image(ground_truth_frames)
 
-        return predicted_wandb, ground_truth_wandb
+        # predicted_frames = torchvision.utils.make_grid(predicted,predicted.size(0))
+        # ground_truth_frames = torchvision.utils.make_grid(target,target.size(0))
+        # predicted_wandb = wandb.Image(predicted_frames)
+        # ground_truth_wandb = wandb.Image(ground_truth_frames)
+
+        empty_channel = torch.full_like(predicted, 0)
+        stitched_video = torch.cat((predicted, empty_channel, target), 1)
+        stitched_frames = torchvision.utils.make_grid(stitched_video, stitched_video.size(0))    
+        stitched_wandb = wandb.Image(stitched_frames)
+
+        # return predicted_wandb, ground_truth_wandb
+        return stitched_wandb
 
     def _plot_reconstructions(self,target): 
         reconstructed = self.model.reconstruct(target)
@@ -231,8 +242,7 @@ class KVAETrainer:
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
 
         if wandb_on: 
-            predictions_val, ground_truth_val = self._plot_predictions(example_data, example_target)
-            wandb.log({"Ground Truth Val": [ground_truth_val]})
+            predictions_val = self._plot_predictions(example_data, example_target)
             wandb.log({"Predicted Val": [predictions_val]})
 
     def visualise_weights(self): 
@@ -252,8 +262,7 @@ class KVAETrainer:
         Y_t = torch.from_numpy(Y).unsqueeze(-1).to(self.args.device)
         dom = torch.cat([X_t,Y_t], dim=-1).float()
         dom = dom.to(self.args.device)
-        dyn_emb, _ = self.model.parameter_net(dom) 
-        dyn_emb = self.model.alpha_out(dyn_emb.reshape(-1,50))
+        dyn_emb = self.model.parameter_net(dom.reshape(-1,2)) 
         Z = dyn_emb.softmax(-1).reshape(N,N,-1)
         Z = Z.cpu().detach().numpy()
 
@@ -274,7 +283,8 @@ parser.add_argument('--dataset', default = "BouncingBall_20", type = str,
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
 
-parser.add_argument('--model', default="KVAE", type=str)
+parser.add_argument('--model', default="KVAE_mod", type=str, 
+                    help = "choose between [KVAE, KVAE_mod] where the latter option uses a different implementation of ELBO.")
 parser.add_argument('--alpha', default="rnn", type=str, 
                     help = "choose between [mlp, rnn]")
 parser.add_argument('--lstm_layers', default=1, type=int, 
@@ -288,7 +298,7 @@ parser.add_argument('--K', default=3, type=int)
 parser.add_argument('--clip', default=150, type=int)
 parser.add_argument('--scale', default=0.3, type=float)
 
-parser.add_argument('--batch_size', default=1, type=int)
+parser.add_argument('--batch_size', default=3, type=int)
 parser.add_argument('--learning_rate', default=0.007, type=float)
 parser.add_argument('--initial_epochs', default=1, type=int, 
                     help = "Number of epochs to train KVAE without dynamics parameter net")
@@ -311,7 +321,10 @@ def main():
         if args.subdirectory == "testing":
             wandb.init(project="Testing")
         else: 
-            wandb.init(project=f"New_KVAE_{args.dataset}")
+            if args.model == "KVAE_mod": 
+                wandb.init(project=f"{args.model}_{args.dataset}")
+            elif args.model == "KVAE":
+                wandb.init(project=f"New_KVAE_{args.dataset}")
 
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
@@ -319,7 +332,7 @@ def main():
         args.device = torch.device('cpu')
 
     if args.dataset == "MovingMNIST": 
-        state_dict_path = "saves/MovingMNIST/kvae/v3/scale=1.0/scheduler_step=5/kvae_state_dict_scale=1.0_39.pth" 
+        state_dict_path = None 
     elif args.dataset == "BouncingBall_20": 
         state_dict_path = None 
     elif args.dataset == "BouncingBall_50": 
