@@ -173,34 +173,39 @@ class HierKalmanVAE(nn.Module):
         mu_j_original = mu_j.clone() 
         sigma_j = self.sigma_0.expand(B, -1,-1).to(self.device)
         sigma_j_original = sigma_j.clone() 
-        latent_means = torch.zeros(T, B, self.levels, self.z_dim, 1).double()
-        latent_variances = torch.zeros(T, B, self.levels, self.z_dim, self.z_dim).double()
+        latent_means = torch.zeros(T, B, self.levels, self.z_dim, 1).double().to(obs.device)
+        latent_variances = torch.zeros(T, B, self.levels, self.z_dim, self.z_dim).double().to(obs.device)
 
         for l in reversed(range(self.levels)): 
             factor_level = self.factor ** l
 
             for t in range(T): 
                 if l == self.levels - 1 and l!=0: # highest level 
+                    if t % factor_level == 0: 
+                        if t == 0: 
+                            pass 
+                        else: 
+                            # print(t)
+                            mu_j = torch.matmul(D[:,t,l,:,:], mu_j) 
+                            sigma_j = torch.matmul(torch.matmul(D[:,t,l,:,:], sigma_j), torch.transpose(D[:,t,l,:,:], 1,2))
+
                     latent_means[t, :, l, :, :] = mu_j.clone() 
                     latent_variances[t, :, l, :, :] = sigma_j.clone() 
-
-                    if t % factor_level == 0 and t!=0 : 
-                        mu_j = torch.matmul(D[:,t+1,l,:,:], mu_j) 
-                        sigma_j = torch.matmul(torch.matmul(D[:,t+1,l,:,:], sigma_j), torch.transpose(A[:,t+1,l,:,:], 1,2))
 
                 elif l != 0: # middle levels
-                    if t == 0: 
-                        mu_j = mu_j_original.clone()
-                        sigma_j = sigma_j_original.clone()
+                    if t % factor_level == 0: 
+                        if t == 0: 
+                            mu_j = mu_j_original.clone()
+                            sigma_j = sigma_j_original.clone()
+
+                        else: 
+                            mu_j = torch.matmul(A[:,t,l,:,:], mu_j) 
+                            mu_j = mu_j + torch.matmul(D[:,t,l,:,:], latent_means[t,:,l+1,:,:].clone())
+                            sigma_j = torch.matmul(torch.matmul(A[:,t,l,:,:], sigma_j), torch.transpose(A[:,t,l,:,:], 1,2)) 
+                            sigma_j = sigma_j + torch.matmul(torch.matmul(D[:,t,l,:,:], latent_variances[t,:,l+1,:,:].clone()), torch.transpose(D[:,t,l,:,:], 1,2))
 
                     latent_means[t, :, l, :, :] = mu_j.clone() 
                     latent_variances[t, :, l, :, :] = sigma_j.clone() 
-                
-                    if t % factor_level == 0 and t!=0: 
-                        mu_j = torch.matmul(A[:,t+1,l,:,:], mu_j) 
-                        mu_j = mu_j + torch.matmul(D[:,t+1,l,:,:], latent_means[t,:,l+1,:,:].clone())
-                        sigma_j = torch.matmul(torch.matmul(A[:,t+1,l,:,:], sigma_j), torch.transpose(A[:,t+1,l,:,:], 1,2)) 
-                        sigma_j = sigma_j + torch.matmul(torch.matmul(D[:,t+1,l,:,:], latent_variances[t,:,l+1,:,:].clone()), torch.transpose(D[:,t+1,l,:,:], 1,2))
 
                 elif l == 0: 
                     mu_pred[t] = mu_t
@@ -220,7 +225,7 @@ class HierKalmanVAE(nn.Module):
                     mu_filt[t] = mu_z
                     sigma_filt[t] = sigma_z
 
-                    if t != T-1: # why does this end 2 time steps before? 
+                    if t != T-1:  
                         mu_t = torch.matmul(A[:,t+1,l,:,:], mu_z)
                         sigma_t = torch.matmul(torch.matmul(A[:,t+1,l,:,:], sigma_z), torch.transpose(A[:,t+1,l,:,:], 1,2))
                         sigma_t += self.Q.unsqueeze(0)
@@ -230,7 +235,6 @@ class HierKalmanVAE(nn.Module):
                             sigma_t += torch.matmul(torch.matmul(D[:,t+1,l,:,:], latent_variances[t,:,l+1,:,:]), torch.transpose(D[:,t+1,l,:,:], 1,2))
                         
         return (mu_filt, sigma_filt), (mu_pred, sigma_pred), (latent_means, latent_variances), S_tensor
-
 
 
     def forward(self, x):
@@ -288,16 +292,18 @@ class HierKalmanVAE(nn.Module):
         """
         ### Seen data
         (B, T, C, H, W) = input.size()
+        # print("Input size in predict", input.size())
 
         with torch.no_grad(): 
             a_sample, *_ = self._encode(input) 
             filtered, pred, hierachical, S_tensor, A_t, C_t, D_t, weights = self._kalman_posterior(a_sample) 
 
-            print(A_t.shape, C_t.shape, D_t.shape) # check if there is anything wrong 
+            # print(A_t.shape, C_t.shape, D_t.shape) # check if there is anything wrong 
 
             mu_z, sigma_z = filtered  
             mu_z = torch.transpose(mu_z, 1, 0)
             sigma_z = torch.transpose(sigma_z, 1, 0)
+            # sigma_z = torch.clamp(sigma_z, 1e-5, 1 - 1e-5)
 
             z_dist = MultivariateNormal(mu_z.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z))
             z_sample = z_dist.sample()
@@ -365,7 +371,7 @@ class HierKalmanVAE(nn.Module):
                         a_sequence[:,t,:] = a_t.squeeze(-1)
 
             pred_seq = self._decode(a_sequence).reshape(B,pred_len,C,H,W) # BS X pred_len X C X H X W 
-
+    
             return pred_seq
 
     def calc_pred_mse(self, input, target):
@@ -381,8 +387,8 @@ class HierKalmanVAE(nn.Module):
             mse_over_time[list]: MSE for each time step 
         """ 
         calc_mse = nn.MSELoss(reduction = 'mean') # pixel-wise MSE 
-        pred_seq, *_ = self.predict(input, input.size(1)) # predict length of input 
-        
+        pred_seq = self.predict(input, input.size(1)) # predict length of input 
+
         mse_over_time = []
 
         for t in range(pred_seq.size(1)): 
@@ -402,8 +408,6 @@ class HierKalmanVAE(nn.Module):
             x_hat = self._decode(a_sample).reshape(B,T,C,H,W)
 
         return x_hat 
-
-        
 
 if __name__ == "__main__": 
     parser = argparse.ArgumentParser()
@@ -433,7 +437,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         kvae(x_data)
 
-    kvae.predict(x_data, pred_len = 20)
+    # kvae.predict(x_data, pred_len = 20)
 
     
 

@@ -1,0 +1,1 @@
+INFO:root:Namespace(a_dim=64, batch_size=128, clip=150, dataset='BouncingBall_50', device=device(type='cuda'), epochs=200, learning_rate=0.001, lstm_layers=1, model='Enc_Dec', save_every=10, scale=0.3, scheduler_step=100, subdirectory='v6', wandb_on='True')

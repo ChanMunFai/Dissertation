@@ -354,9 +354,9 @@ class KalmanVAE(nn.Module):
                     hidden_state, cell_state = self.state_dyn_net
                     dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
                     dyn_emb = self.alpha_out(dyn_emb)
-                    
+
                 elif self.alpha == "mlp": 
-                    dyn_emb = self.parameter_net(joint_obs.reshape(B*T, -1))
+                    dyn_emb = self.parameter_net(a_t.reshape(B, -1))
 
                 weights = dyn_emb.softmax(-1).squeeze(1)
                 pred_weights[:,t] = weights

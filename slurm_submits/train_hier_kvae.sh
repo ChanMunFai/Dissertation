@@ -11,7 +11,16 @@ uptime
 
 cd /vol/bitbucket/mc821/Dissertation
 
-# ### BouncingBall 20 
-dset=BouncingBall_20
-python main_hier_kvae.py --subdirectory=testing --levels=1 --scale=0.3 --epoch=5 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+### BouncingBall 20 
+# dset=BouncingBall_20
+# python main_hier_kvae.py --subdirectory=v2 --levels=2 --factor=2 --scale=0.3 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
 # python main_hier_kvae.py --subdirectory=v1 --levels=2 --scale=0.3 --epoch=90 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+
+# dset=BouncingBall_20
+# python main_hier_kvae.py --subdirectory=v1 --levels=2 --scale=0.3 --epoch=90 --dataset $dset --batch_size=128 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+
+dset=BouncingBall_50
+python main_hier_kvae.py --subdirectory=v1 --levels=2 --factor=2 --scale=0.3 --epoch=90 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+python main_hier_kvae.py --subdirectory=v1 --levels=2 --factor=4 --scale=0.3 --epoch=90 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+python main_hier_kvae.py --subdirectory=v1 --levels=2 --factor=6 --scale=0.3 --epoch=90 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 
+python main_hier_kvae.py --subdirectory=v1 --levels=2 --factor=1 --scale=0.3 --epoch=90 --dataset $dset --batch_size=32 --learning_rate=0.007 --initial_epochs=10 --scheduler_step=20 --wandb_on=True 

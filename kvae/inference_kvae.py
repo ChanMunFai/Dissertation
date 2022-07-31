@@ -285,7 +285,35 @@ class Modified_ELBO_20_Args:
     K = 3
     device = "cpu"
     scale = 0.3
-    state_dict_path = "saves/BouncingBall_20/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
+    state_dict_path = "saves/BouncingBall_20/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_89.pth"
+
+class Modified_ELBO_50_Bonus_Args:
+    subdirectory = "experiment_mod_50_bonus"
+    dataset = "BouncingBall_50"
+    model = 'KVAE'
+    alpha = "rnn"
+    lstm_layers = 3
+    x_dim = 1
+    a_dim = 2
+    z_dim = 5
+    K = 7
+    device = "cpu"
+    scale = 0.3
+    state_dict_path = "saves/BouncingBall_50/kvae_mod/bonus/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_99.pth"
+
+class Modified_ELBO_50_1LSTM:
+    subdirectory = "experiment_mod_50_1lstm"
+    dataset = "BouncingBall_50"
+    model = 'KVAE'
+    alpha = "rnn"
+    lstm_layers = 1
+    x_dim = 1
+    a_dim = 2
+    z_dim = 4
+    K = 3
+    device = "cpu"
+    scale = 0.3
+    state_dict_path = "saves/BouncingBall_50/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_89.pth"
 
 if __name__ == "__main__": 
     args1 = Ex1_Args
@@ -293,10 +321,13 @@ if __name__ == "__main__":
     args3 = Ex3_Args
     args_bb20 = Ex20_Args
     args_bonus = Bonus_Args
-    args_bb20_mod = Modified_ELBO_20_Args
 
-    # data, target = load_dataset("BouncingBall_50", batch_size = 32)
-    data, target = load_dataset("BouncingBall_20", batch_size = 32)
+    args_bb20_mod = Modified_ELBO_20_Args
+    args_bonus_mod = Modified_ELBO_50_Bonus_Args
+    args1_mod = Modified_ELBO_50_1LSTM
+
+    data, target = load_dataset("BouncingBall_50", batch_size = 32)
+    # data, target = load_dataset("BouncingBall_20", batch_size = 32)
 
     ### Plot predictions for Bouncing Ball 50 
     # plot_predictions(data, target, 50, args_bb20)
@@ -304,10 +335,9 @@ if __name__ == "__main__":
     # plot_predictions_overlap(data, target, 50, args_bb20)
 
     ### Plot predictions for Bouncing Ball 20 
-    plot_predictions(data, target, 20, args_bb20_mod)
-    plot_predictions_diff_colours(data, target, 20, args_bb20_mod)
-    plot_predictions_overlap(data, target, 20, args_bb20_mod)
-
+    # plot_predictions(data, target, 20, args_bb20_mod)
+    # plot_predictions_diff_colours(data, target, 20, args_bb20_mod)
+    # plot_predictions_overlap(data, target, 20, args_bb20_mod)
 
     def plot_mse_bb50(): 
         ### MSE over time 
@@ -317,6 +347,9 @@ if __name__ == "__main__":
         mse_kvae_bb20 = calc_model_losses_over_time(data, target, 50, args_bb20)
         mse_kvae_bonus = calc_model_losses_over_time(data, target, 50, args_bonus)
 
+        mse_kvae_mod_bonus = calc_model_losses_over_time(data, target, 50, args_bonus_mod)
+        mse_kvae1_mod = calc_model_losses_over_time(data, target, 50, args1_mod)
+        
         mse_black = calc_black_losses_over_time(target)
         mse_last_seen = calc_last_seen_losses_over_time(data, target)
 
@@ -326,6 +359,10 @@ if __name__ == "__main__":
         plt.plot(mse_kvae3, label = "KVAE 3 LSTM")
         plt.plot(mse_kvae_bb20, label="KVAE (20)")
         plt.plot(mse_kvae_bonus, label="KVAE (Bonus)")
+
+        plt.plot(mse_kvae_mod_bonus, label="KVAE (Bonus) - Mod")
+        plt.plot(mse_kvae1_mod, label="KVAE 1 LSTM - Mod")
+        
         plt.plot(mse_black, label="Black")
         plt.plot(mse_last_seen, label = "Last Seen Frame")
 
@@ -367,8 +404,9 @@ if __name__ == "__main__":
         plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
         plt.close('all')
 
-    # plot_mse_bb50()
-    plot_mse_bb20()
+    plot_mse_bb50()
+    # plot_mse_bb20()
+
 
 
 

@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ExponentialLR
 
 import matplotlib.pyplot as plt
-from kvae.model_hier_kvae import HierKalmanVAE
+from hier_kvae.model_hier_kvae import HierKalmanVAE
 from data.MovingMNIST import MovingMNIST
 from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
@@ -35,9 +35,6 @@ class HierKVAETrainer:
         parameters = list(self.model.encoder.parameters()) + list(self.model.decoder.parameters()) \
                     + [self.model.a1, self.model.A, self.model.C]
 
-        if self.args.train_reconstruction == True: 
-            parameters = [self.model.encoder.parameters(), self.model.decoder.parameters()]
-        
         self.optimizer = torch.optim.Adam(parameters, lr=self.args.learning_rate)
         self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
     
@@ -64,16 +61,16 @@ class HierKVAETrainer:
         example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
         
-        if wandb_on: 
-            predictions = self._plot_predictions(example_data, example_target)
-            wandb.log({"Predictions Train": [predictions]})
+        # if wandb_on: 
+        #     predictions = self._plot_predictions(example_data, example_target)
+        #     wandb.log({"Predictions Train": [predictions]})
 
-            reconstructions = self._plot_reconstructions(example_data)
-            wandb.log({"Reconstructions": [reconstructions]})
+        #     reconstructions = self._plot_reconstructions(example_data)
+        #     wandb.log({"Reconstructions": [reconstructions]})
 
         for epoch in range(self.args.epochs):
 
-            if epoch == self.args.initial_epochs and self.args.train_reconstruction == False: # Otherwise train KVAE only 
+            if epoch == self.args.initial_epochs: # Otherwise train KVAE only 
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
                 self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
 
@@ -208,6 +205,7 @@ class HierKVAETrainer:
             targets = torch.where(targets > 0.5, 1.0, 0.0)  
 
             # Print out MSE accuracy 
+            # print(data.shape, targets.shape)
             avg_mse, _ = self.model.calc_pred_mse(data, targets)
             val_mse += avg_mse
 
@@ -260,9 +258,7 @@ parser.add_argument('--initial_epochs', default=1, type=int,
                     help = "Number of epochs to train KVAE without dynamics parameter net")
 parser.add_argument('--scheduler_step', default=82, type=int, 
                     help = 'number of steps for scheduler. choose a number greater than epochs to have constant LR.')
-parser.add_argument('--save_every', default=10, type=int) 
-parser.add_argument('--train_reconstruction', default=False, type=str, 
-                    help = "Trains using reconstruction loss only if True.") 
+parser.add_argument('--save_every', default=10, type=int)  
 parser.add_argument('--levels', default=3, type=int, 
                 help = "Number of levels in Linear State Space Model.")
 parser.add_argument('--factor', default=2, type=int, 
@@ -281,7 +277,7 @@ def main():
         if args.subdirectory == "testing":
             wandb.init(project="Testing")
         else: 
-            wandb.init(project=f"{args.model}_{args.dataset}")
+            wandb.init(project=f"{args.model}_levels={args.levels}_{args.dataset}")
             
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
@@ -350,6 +346,7 @@ def main():
 
     trainer = HierKVAETrainer(state_dict_path= state_dict_path, args=args)
     trainer.train(train_loader, val_loader)
+    # trainer.predict_val(val_loader)
 
 if __name__ == "__main__":
     main()
