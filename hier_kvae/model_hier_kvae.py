@@ -55,7 +55,8 @@ class HierKalmanVAE(nn.Module):
 
         # Covariance matrices - fixed. Noise values obtained from paper. 
         self.Q = 0.08*torch.eye(self.z_dim).double().to(self.device) 
-        self.R = 0.03*torch.eye(self.a_dim).double().to(self.device) 
+        self.R = 0.03*torch.eye(self.a_dim).double().to(self.device)
+        self.O = 0.08*torch.eye(self.z_dim).double().to(self.device)
 
         self._init_weights()
 
@@ -186,8 +187,9 @@ class HierKalmanVAE(nn.Module):
                             pass 
                         else: 
                             # print(t)
-                            mu_j = torch.matmul(D[:,t,l,:,:], mu_j) 
-                            sigma_j = torch.matmul(torch.matmul(D[:,t,l,:,:], sigma_j), torch.transpose(D[:,t,l,:,:], 1,2))
+                            mu_j = torch.matmul(A[:,t,l,:,:], mu_j) 
+                            sigma_j = torch.matmul(torch.matmul(A[:,t,l,:,:], sigma_j), torch.transpose(A[:,t,l,:,:], 1,2)) 
+                            sigma_j += self.O.unsqueeze(0) # verify this 
 
                     latent_means[t, :, l, :, :] = mu_j.clone() 
                     latent_variances[t, :, l, :, :] = sigma_j.clone() 
@@ -203,6 +205,7 @@ class HierKalmanVAE(nn.Module):
                             mu_j = mu_j + torch.matmul(D[:,t,l,:,:], latent_means[t,:,l+1,:,:].clone())
                             sigma_j = torch.matmul(torch.matmul(A[:,t,l,:,:], sigma_j), torch.transpose(A[:,t,l,:,:], 1,2)) 
                             sigma_j = sigma_j + torch.matmul(torch.matmul(D[:,t,l,:,:], latent_variances[t,:,l+1,:,:].clone()), torch.transpose(D[:,t,l,:,:], 1,2))
+                            sigma_j += self.O.unsqueeze(0) # verify this
 
                     latent_means[t, :, l, :, :] = mu_j.clone() 
                     latent_variances[t, :, l, :, :] = sigma_j.clone() 
