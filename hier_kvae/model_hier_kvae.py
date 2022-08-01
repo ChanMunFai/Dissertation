@@ -317,6 +317,7 @@ class HierKalmanVAE(nn.Module):
             j_var = torch.transpose(j_var, 1, 0) # BS X T X layers X z_dim X z_dim
             
             ### Just use j_mean directly 
+            # replace with j_var 
 
             ### Unseen data
             z_sequence = torch.zeros((B, pred_len, self.z_dim), device = self.device)
@@ -328,19 +329,20 @@ class HierKalmanVAE(nn.Module):
 
             pred_weights = torch.zeros((B, pred_len, self.K), device = self.device)
 
-            # Initialise weight at first time step 
-            if self.alpha == "rnn": 
-                hidden_state, cell_state = self.state_dyn_net
-                dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
-                dyn_emb = self.alpha_out(dyn_emb)
-
-            elif self.alpha == "mlp": 
-                dyn_emb = self.parameter_net(a_t.reshape(B, -1))
-
-            weights = dyn_emb.softmax(-1).squeeze(1)
-            pred_weights[:,0] = weights
-
             for t in range(pred_len): 
+                if self.alpha == "rnn": 
+                    hidden_state, cell_state = self.state_dyn_net
+                    dyn_emb, self.state_dyn_net = self.parameter_net(a_t, (hidden_state, cell_state))
+                    dyn_emb = self.alpha_out(dyn_emb)
+
+                elif self.alpha == "mlp": 
+                    dyn_emb = self.parameter_net(a_t.reshape(B, -1))
+
+                weights = dyn_emb.softmax(-1).squeeze(1)
+                pred_weights[:,t] = weights
+
+                C_t = torch.matmul(weights, self.C.reshape(self.K, -1)).reshape(B, self.a_dim, self.z_dim) # BS X z_dim x z_dim 
+
                 for l in reversed(range(self.levels)): 
                     factor_level = self.factor ** l
 
@@ -367,11 +369,11 @@ class HierKalmanVAE(nn.Module):
                             z_t = z_t.squeeze(-1)
 
                         # a_t|z_t
-                        C_t = torch.matmul(weights, self.C.reshape(self.K, -1)).reshape(B, self.a_dim, self.z_dim) # BS X z_dim x z_dim 
-                        a_t = torch.matmul(C_t, z_t.unsqueeze(-1))
+                        a_t = torch.matmul(C_t, z_t.unsqueeze(-1)).squeeze(-1)
+                        a_t = a_t.unsqueeze(1)
                         
                         z_sequence[:,t,:] = z_t
-                        a_sequence[:,t,:] = a_t.squeeze(-1)
+                        a_sequence[:,t,:] = a_t.squeeze(1)
 
             pred_seq = self._decode(a_sequence).reshape(B,pred_len,C,H,W) # BS X pred_len X C X H X W 
     
