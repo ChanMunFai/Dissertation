@@ -28,8 +28,8 @@ class PosteriorInferenceNet(nn.Module):
     def __init__(self, tbatch: int):
         super().__init__()
         self.features = nn.Sequential(
-            nn.BatchNorm2d(10), # changed from 32 to 10
-            nn.Conv2d(10, 64, 3, stride=2, padding=1), # changed from 32 to 10
+            nn.BatchNorm2d(tbatch), # changed from 32 to 10
+            nn.Conv2d(tbatch, 64, 3, stride=2, padding=1), # changed from 32 to 10
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, 3, padding=1),
