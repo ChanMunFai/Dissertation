@@ -9,7 +9,7 @@ import torch
 import codecs
 import matplotlib.pyplot as plt
 
-class MovingMNIST(data.Dataset):
+class MovingMNISTDataLoader(data.Dataset):
     """`MovingMNIST <http://www.cs.toronto.edu/~nitish/unsupervised_video/>`_ Dataset.
 
     Args:

@@ -96,7 +96,7 @@ class BouncingBall2D(object):
         positions = []
         image_seq = []
         self._create_ball()
-        for i in range(40):
+        for i in range(100):
             # Progress time forward
             for x in range(self._physics_steps_per_frame):
                 self._space.step(self._dt)
@@ -116,8 +116,9 @@ class BouncingBall2D(object):
             temp_surf = pygame.image.fromstring(string_image,(256, 256),'RGB' )
             tmp_arr = pygame.surfarray.array3d(temp_surf)
             # Change to grayscale
-            image = cv2.cvtColor(cv2.resize(tmp_arr, dsize=(32, 32)), cv2.COLOR_RGB2GRAY)
+            image = cv2.cvtColor(cv2.resize(tmp_arr, dsize=(64, 64)), cv2.COLOR_RGB2GRAY)
             image_seq.append(image)
+        
         positions = np.array(positions)
         image_seq = np.array(image_seq)
         return positions, image_seq
