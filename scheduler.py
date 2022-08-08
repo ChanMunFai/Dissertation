@@ -1,5 +1,5 @@
 import torch
-from data.MovingMNIST import MovingMNIST
+from dataloader.moving_mnist import MovingMNISTDataLoader
 
 class LinearScheduler: 
     """Basic linear scheduler

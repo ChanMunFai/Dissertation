@@ -2,6 +2,8 @@ import os
 import math
 import logging
 import argparse
+import time 
+
 from pprint import pprint
 from tqdm import tqdm
 import numpy as np 
@@ -19,8 +21,10 @@ from torch.optim.lr_scheduler import ExponentialLR
 import matplotlib.pyplot as plt
 from kvae.model_kvae import KalmanVAE
 from kvae.model_kvae_mod import KalmanVAEMod
-from data.MovingMNIST import MovingMNIST
-from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.bouncing_ball import BouncingBallDataLoader
+from dataloader.healing_mnist import HealingMNISTDataLoader
+
 
 import wandb
 
@@ -67,6 +71,11 @@ class KVAETrainer:
         example_target = example_target[0].clone().to(self.args.device)
         example_target = (example_target - example_target.min()) / (example_target.max() - example_target.min())
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
+
+        if wandb_on: 
+            predictions_coloured, predictions_overlapped = self._plot_predictions(example_data, example_target)
+            wandb.log({"Predictions": [predictions_coloured]})
+            wandb.log({"Predictions (Overlapped)": [predictions_overlapped]})
         
         for epoch in range(self.args.epochs):
 
@@ -80,6 +89,9 @@ class KVAETrainer:
             running_latent_ll = 0 
             running_elbo_kf = 0
             running_mse = 0 
+            running_batch_time = 0
+
+            end_time = time.time()
 
             for data, _ in tqdm(train_loader):
                 
@@ -101,6 +113,12 @@ class KVAETrainer:
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip)
                 self.optimizer.step()
 
+                # Measure time 
+                batch_time = time.time() - end_time
+                end_time = time.time()
+
+                # print("Batch Time: ", batch_time)
+
                 metrics = {"train/train_loss": loss, 
                             "train/reconstruction_loss": recon_loss, 
                             "train/q(a)": latent_ll, 
@@ -117,6 +135,7 @@ class KVAETrainer:
                 running_latent_ll += latent_ll.item()
                 running_elbo_kf += elbo_kf.item()
                 running_mse += mse.item()
+                running_batch_time += batch_time
 
             training_loss = running_loss/len(train_loader)
             training_recon = running_recon/len(train_loader)
@@ -124,18 +143,20 @@ class KVAETrainer:
             training_elbo_kf = running_elbo_kf/len(train_loader)
             training_mse = running_mse/len(train_loader)
             current_lr = self.scheduler.get_last_lr()[0]
+            avg_batch_time = running_batch_time/len(train_loader)
 
             print(f"Epoch: {epoch}\
                     \n Train Loss: {training_loss}\
                     \n Reconstruction Loss: {training_recon}\
                     \n Latent Log-likelihood: {training_latent_ll}\
                     \n ELBO Kalman Filter: {training_elbo_kf}\
-                    \n MSE: {training_mse}")
+                    \n MSE: {training_mse}\
+                    \n Average Batch Time: {avg_batch_time}")
 
-            logging.info(f"{training_loss:.8f}, {training_recon:.8f}, {training_latent_ll:.8f}, {training_elbo_kf:.8f}, {training_mse:.8f}, {current_lr}")
+            logging.info(f"{training_loss:.8f}, {training_recon:.8f}, {training_latent_ll:.8f}, {training_elbo_kf:.8f}, {training_mse:.8f}, {current_lr}, {avg_batch_time:.3f}")
             # wandb.log({"train/learning rate": current_lr})
 
-            if epoch % self.args.save_every == 0:
+            if epoch % self.args.save_every == 0 and epoch!=0:
                 self._save_model(epoch)
 
                 # Validation prediction accuracy 
@@ -143,8 +164,9 @@ class KVAETrainer:
 
             if epoch % 5 == 0: 
                 if wandb_on: 
-                    predictions = self._plot_predictions(example_data, example_target)
-                    wandb.log({"Predictions": [predictions]})
+                    predictions_coloured, predictions_overlapped = self._plot_predictions(example_data, example_target)
+                    wandb.log({"Predictions": [predictions_coloured]})
+                    wandb.log({"Predictions (Overlapped)": [predictions_overlapped]})
 
                     reconstructions, original = self._plot_reconstructions(example_data)
                     wandb.log({"Original Video": [original]})
@@ -181,21 +203,22 @@ class KVAETrainer:
 
     def _plot_predictions(self, input, target):
         predicted, _, _ = self.model.predict(input, target.size(1))
-        predicted = predicted.squeeze(0)
+        predicted = predicted.squeeze(0).to(target.device)
         target = target.squeeze(0)
 
-        # predicted_frames = torchvision.utils.make_grid(predicted,predicted.size(0))
-        # ground_truth_frames = torchvision.utils.make_grid(target,target.size(0))
-        # predicted_wandb = wandb.Image(predicted_frames)
-        # ground_truth_wandb = wandb.Image(ground_truth_frames)
-
+        # Different colours prediction 
         empty_channel = torch.full_like(predicted, 0)
         stitched_video = torch.cat((predicted, empty_channel, target), 1)
         stitched_frames = torchvision.utils.make_grid(stitched_video, stitched_video.size(0))    
         stitched_wandb = wandb.Image(stitched_frames)
 
-        # return predicted_wandb, ground_truth_wandb
-        return stitched_wandb
+        # overlapped prediction 
+        predicted = torch.where(predicted > 0.5, 1.0, 0.0).to(target.device) # binarise 
+        overlap = torch.where(predicted == target, predicted, torch.tensor(0, dtype=predicted.dtype, device = target.device))
+        overlap_frames = torchvision.utils.make_grid(overlap, overlap.size(0)) 
+        overlapped_wandb = wandb.Image(overlap_frames)   
+    
+        return stitched_wandb, overlapped_wandb
 
     def _plot_reconstructions(self,target): 
         reconstructed = self.model.reconstruct(target)
@@ -242,8 +265,9 @@ class KVAETrainer:
         example_target = torch.where(example_target > 0.5, 1.0, 0.0).unsqueeze(0)
 
         if wandb_on: 
-            predictions_val = self._plot_predictions(example_data, example_target)
+            predictions_val, predictions_val_overlap = self._plot_predictions(example_data, example_target)
             wandb.log({"Predicted Val": [predictions_val]})
+            wandb.log({"Predicted Val (Overlapped)": [predictions_val_overlap]})
 
     def visualise_weights(self): 
         """ Visualise the contours of when weights are more active. 
@@ -278,7 +302,7 @@ class KVAETrainer:
 
             
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "BouncingBall_20", type = str, 
+parser.add_argument('--dataset', default = "MovingMNIST", type = str, 
                     help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
@@ -291,7 +315,7 @@ parser.add_argument('--lstm_layers', default=1, type=int,
                     help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
 
 parser.add_argument('--x_dim', default=1, type=int)
-parser.add_argument('--a_dim', default=2, type=int)
+parser.add_argument('--a_dim', default=128, type=int)
 parser.add_argument('--z_dim', default=4, type=int)
 parser.add_argument('--K', default=3, type=int)
 
@@ -337,6 +361,8 @@ def main():
         state_dict_path = None 
     elif args.dataset == "BouncingBall_50": 
         state_dict_path = None 
+    elif args.dataset == "HealingMNIST_20": 
+        state_dict_path = None 
        
     # set up logging
     log_fname = f'{args.model}_scale={args.scale}_steps={args.scheduler_step}_epochs={args.epochs}.log'
@@ -351,13 +377,13 @@ def main():
 
     # Datasets
     if args.dataset == "MovingMNIST": 
-        train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+        train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set,
                     batch_size=args.batch_size,
                     shuffle=True)
 
-        val_set = MovingMNIST(root='dataset/mnist', train=False, download=True)
+        val_set = MovingMNISTDataLoader(root='dataset/mnist', train=False, download=True)
         val_loader = torch.utils.data.DataLoader(
                     dataset=val_set,
                     batch_size=args.batch_size,
@@ -388,6 +414,20 @@ def main():
                     dataset=val_set, 
                     batch_size=args.batch_size, 
                     shuffle=True)
+
+    elif args.dataset == "HealingMNIST_20": 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/v1/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = HealingMNISTDataLoader('dataset/HealingMNIST/20/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+                    
     else: 
         raise NotImplementedError
 

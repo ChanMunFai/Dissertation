@@ -1,5 +1,3 @@
-# Test for updated predict function for 1 layer
-
 import os 
 import argparse 
 import numpy as np
@@ -13,13 +11,14 @@ from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple
 from hier_kvae.model_hier_kvae import HierKalmanVAE
 from kvae.model_kvae import KalmanVAE
 from kvae.model_kvae_mod import KalmanVAEMod
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.bouncing_ball import BouncingBallDataLoader
+from dataloader.healing_mnist import HealingMNISTDataLoader
 
-from data.MovingMNIST import MovingMNIST
-from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
 def load_dataset(dataset, batch_size): 
     if dataset == "MovingMNIST": 
-        train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+        train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set,
                     batch_size=batch_size,
@@ -38,6 +37,20 @@ def load_dataset(dataset, batch_size):
                     dataset=train_set, 
                     batch_size=batch_size, 
                     shuffle=False)
+
+    elif dataset == "HealingMNIST_20": 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/20/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=True)
+
+    elif dataset == "HealingMNIST_50": 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/50/', train = True, seen_len = 20)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=True)
     else: 
         raise NotImplementedError
 
@@ -72,25 +85,35 @@ def call_args(Args):
     args = Args()
     return args
 
-def load_train_dataset(dataset, batch_size): 
-    if dataset == "BouncingBall_50": 
-        train_set = BouncingBallDataLoader('dataset/bouncing_ball/50/train')
-        train_loader = torch.utils.data.DataLoader(
-                    dataset=train_set, 
-                    batch_size=batch_size, 
-                    shuffle=False)
-    else: 
-        print("Invalid Dataset")
-        return 
+def plot_reconstructions(x, args):
+    """ Plot predictions where ground truth and reconstructions are plotted 
+    in different images (and directories)"""
 
-    data, target = next(iter(train_loader))
-    data = (data - data.min()) / (data.max() - data.min())
-    data = torch.where(data > 0.5, 1.0, 0.0)
+    kvae = load_kvae(args)
 
-    target = (target - target.min()) / (target.max() - target.min())
-    target = torch.where(target > 0.5, 1.0, 0.0)
+    x_reconstructed = kvae.reconstruct(x)
+    print("Size of Reconstructions:", x_reconstructed.size())
+    
+    for batch_item, i in enumerate(x_reconstructed):
+        output_dir_pred = f"results/{args.dataset}/Hier_KVAE/{args.subdirectory}/reconstructions/"
+        output_dir_gt = f"results/{args.dataset}/Hier_KVAE/{args.subdirectory}/seen_frames/"
+        if not os.path.exists(output_dir_pred):
+            os.makedirs(output_dir_pred)
+        if not os.path.exists(output_dir_gt):
+            os.makedirs(output_dir_gt)
 
-    return data, target 
+        predicted_frames = torchvision.utils.make_grid(i,i.size(0))
+
+        ground_truth = x[batch_item,:,:,:,:]
+        ground_truth_frames = torchvision.utils.make_grid(ground_truth,ground_truth.size(0))
+        stitched_frames = torchvision.utils.make_grid([ground_truth_frames, predicted_frames],1)
+
+        plt.imsave(output_dir_pred + f"reconstructions_{batch_item}.jpeg",
+                predicted_frames.cpu().permute(1, 2, 0).numpy())
+
+        plt.imsave(output_dir_gt + f"seen_{batch_item}.jpeg",
+                ground_truth_frames.cpu().permute(1, 2, 0).numpy())
+    return 
 
 def plot_predictions(x, target, pred_len, args):
     """ Plot predictions where ground truth and predictions are plotted 
@@ -98,7 +121,11 @@ def plot_predictions(x, target, pred_len, args):
 
     kvae = load_kvae(args)
 
-    x_predicted = kvae.predict(x, pred_len)
+    if args.model == "KVAE_hier": 
+        x_predicted = kvae.predict(x, pred_len)
+    else: 
+        x_predicted, *_ = kvae.predict(x, pred_len)
+    
     print("Size of Predictions:", x_predicted.size())
     
     for batch_item, i in enumerate(x_predicted):
@@ -130,7 +157,11 @@ def plot_predictions_diff_colours(x, target, pred_len, args):
     """
     kvae = load_kvae(args)
 
-    x_predicted = kvae.predict(x, pred_len)
+    if args.model == "KVAE_hier": 
+        x_predicted = kvae.predict(x, pred_len)
+    else: 
+        x_predicted, *_ = kvae.predict(x, pred_len)
+    
     print("Size of Predictions:", x_predicted.size())
     
     for batch_item, i in enumerate(x_predicted):
@@ -152,7 +183,12 @@ def plot_predictions_overlap(x, target, pred_len, args):
     """ Plot overlaps of predictions and ground truth."""
     kvae = load_kvae(args)
 
-    x_predicted = kvae.predict(x, pred_len)
+    if args.model == "KVAE_hier": 
+        x_predicted = kvae.predict(x, pred_len)
+    else: 
+        x_predicted, *_ = kvae.predict(x, pred_len)
+    
+    x_predicted = torch.where(x_predicted > 0.5, 1.0, 0.0).to(target.device) 
     print("Size of Predictions:", x_predicted.size())
     
     for batch_item, i in enumerate(x_predicted):
@@ -267,7 +303,7 @@ class Ex3_Args:
     state_dict_path = "saves/BouncingBall_50/kvae_hier/v3/levels=2/factor=2/kvae_state_dict_scale_89.pth"
 
 class Ex4_Args:
-    subdirectory = "experiment_hier_4" 
+    subdirectory = "levels=3_factor=1" 
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
     alpha = "rnn"
@@ -356,9 +392,9 @@ if __name__ == "__main__":
     # data, target = load_dataset("BouncingBall_20", batch_size = 32)
 
     ### Plot predictions for Bouncing Ball 50 
-    # plot_predictions(data, target, 50, args_bb20)
-    # plot_predictions_diff_colours(data, target, 50, args1)
-    # plot_predictions_overlap(data, target, 50, args_bb20)
+    plot_predictions(data, target, 50, args4)
+    plot_predictions_diff_colours(data, target, 50, args4)
+    plot_predictions_overlap(data, target, 50, args4)
 
     def plot_mse_bb50(): 
         ### MSE over time 
@@ -428,7 +464,7 @@ if __name__ == "__main__":
         plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
         plt.close('all')
 
-    plot_mse_bb50()
+    # plot_mse_bb50()
     # plot_mse_bb20()
 
 

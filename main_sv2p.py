@@ -7,18 +7,25 @@ from tqdm import tqdm
 import copy
 
 import torch
+torch.cuda.empty_cache()
 import torch.nn as nn
 import torch.utils
 import torch.utils.data
+import torchvision 
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 
 import matplotlib.pyplot as plt
-from data.MovingMNIST import MovingMNIST
 from sv2p.cdna import CDNA # network for CDNA
 from sv2p.model_sv2p import PosteriorInferenceNet, LatentVariableSampler
 from scheduler import LinearScheduler
+
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.bouncing_ball import BouncingBallDataLoader
+from dataloader.healing_mnist import HealingMNISTDataLoader
+
+import wandb 
 
 class SV2PTrainer:
     """
@@ -44,9 +51,10 @@ class SV2PTrainer:
                 *args, **kwargs):
 
         self.args = kwargs['args']
-        self.writer = SummaryWriter(f"runs/sv2p/Stage{self.args.stage}/")
-        self.beta_scheduler = beta_scheduler
+        self.writer = SummaryWriter()
+        print(self.args)
 
+        self.beta_scheduler = beta_scheduler
         assert state_dict_path_det == None or state_dict_path_stoc == None
 
         self.det_model = CDNA(in_channels = 1, cond_channels = 0,
@@ -60,21 +68,23 @@ class SV2PTrainer:
         if state_dict_path_stoc: 
             state_dict = torch.load(state_dict_path_stoc, map_location = self.args.device)
             self.stoc_model.load_state_dict(state_dict)
+            logging.info(f"Loaded State Dict from {state_dict_path_stoc}")
         elif state_dict_path_det: 
             self.load_stochastic_model() # load deterministic layers into stochastic model 
+            logging.info(f"Loaded State Dict from {state_dict_path_det}")
         
         # Posterior network
-        self.q_net = PosteriorInferenceNet(tbatch = 10).to(self.args.device) # figure out what tbatch is again (seqlen?)
-        if state_dict_path_posterior: 
-            state_dict_posterior = torch.load(state_dict_path_posterior, map_location = self.args.device)
-            self.q_net.load_state_dict(state_dict_posterior)
+        if self.args.dataset == "BouncingBall_50": 
+            self.q_net = PosteriorInferenceNet(tbatch = 50).to(self.args.device) # figure out what tbatch is again (seqlen?)
+        elif self.args.dataset == "MovingMNIST": 
+            self.q_net = PosteriorInferenceNet(tbatch = 10).to(self.args.device) # figure out what tbatch is again (seqlen?)
 
         self.sampler = LatentVariableSampler()
 
         if self.args.stage == 2 or self.args.stage == 3: 
             if not state_dict_path_posterior: 
                 print("WARNING!: State dict for posterior is not loaded")
-                loggin.info("WARNING!: State dict for posterior is not loaded")
+                logging.info("WARNING!: State dict for posterior is not loaded")
 
         if self.args.stage == 0: 
             self.optimizer = torch.optim.Adam(self.det_model.parameters(),
@@ -99,7 +109,6 @@ class SV2PTrainer:
         Inputs: x_0 to x_T-1
         Targets: x_1 to x_T
         """
-
         inputs = data[:, :-1, :, :, :]
         targets = data[:, 1:, :, :, :]
 
@@ -119,18 +128,33 @@ class SV2PTrainer:
 
         steps = 0
 
+        # Save a copy of data to use for evaluation 
+        example_data, example_unseen = next(iter(train_loader))
+
+        example_data = example_data[0].clone().to(self.args.device)
+        example_data = (example_data - example_data.min()) / (example_data.max() - example_data.min())
+        example_data = torch.where(example_data > 0.5, 1.0, 0.0).unsqueeze(0)
+
+        example_unseen = example_unseen[0].clone().to(self.args.device)
+        example_unseen = (example_unseen - example_unseen.min()) / (example_unseen.max() - example_unseen.min())
+        example_unseen = torch.where(example_unseen > 0.5, 1.0, 0.0).unsqueeze(0)
+
+        # self.predict(example_data, example_unseen)
+        # if wandb_on: 
+        #     predictions = self.plot_predictions(example_data, example_unseen) 
+        #     wandb.log({"Predictions": [predictions]})
+
         for epoch in range(self.args.epochs):
             print("Epoch:", epoch)
             running_loss = 0 # keep track of loss per epoch
             running_kld = 0
             running_recon = 0
 
-            for data, _ in tqdm(train_loader):
+            for data, unseen in tqdm(train_loader):
                 data = data.to(self.args.device)
-                data = torch.unsqueeze(data, 2) # Batch Size X Seq Length X Channels X Height X Width
                 data = (data - data.min()) / (data.max() - data.min())
 
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
 
                 # Separate data into inputs and targets
                 # inputs, targets are both of size: Batch Size X Seq Length - 1 X Channels X Height X Width
@@ -197,25 +221,12 @@ class SV2PTrainer:
                     
                 running_loss += total_loss.item()
 
-                self.writer.add_scalar('Loss/Total Loss',
-                                        total_loss,
-                                        steps)
+                metrics = {"train/train_loss": total_loss, 
+                           "train/reconstruction_loss": recon_loss, 
+                           "train/kld": kld_loss}
 
-                if self.args.stage != 0: 
-                    running_kld += kld_loss.item()
-                    running_recon +=  recon_loss.item()
-                    self.writer.add_scalar('Loss/MSE',
-                                        recon_loss,
-                                        steps)
-                    self.writer.add_scalar('Loss/KLD Loss',
-                                        kld_loss,
-                                        steps)
-                    if self.args.stage == 3: 
-                        self.writer.add_scalar('Beta value',
-                                        beta_value,
-                                        steps)
-
-                steps += 1
+                if wandb_on: 
+                    wandb.log(metrics)
 
             training_loss = running_loss/len(train_loader)
             training_kld = running_kld/len(train_loader)
@@ -238,6 +249,11 @@ class SV2PTrainer:
             if epoch % self.args.save_every == 0:
                 self._save_model(epoch)
 
+                if wandb_on: 
+                    predictions = self.plot_predictions(example_data, example_unseen) 
+                    wandb.log({"Predictions": [predictions]})
+
+
         logging.info('Finished training')
         
         self._save_model(epoch)
@@ -245,14 +261,13 @@ class SV2PTrainer:
 
     def _save_model(self, epoch):
         if self.args.stage != 3:  
-            checkpoint_path = f'saves/sv2p/stage{self.args.stage}/finetuned2/'
+            checkpoint_path = f'saves/{self.args.dataset}/sv2p/stage{self.args.stage}/{self.args.subdirectory}/'
         else: 
-            checkpoint_path = f'saves/sv2p/stage{self.args.stage}/final_beta={self.args.beta_end}/'
+            checkpoint_path = f'saves/{self.args.dataset}/sv2p/stage{self.args.stage}/{self.args.subdirectory}/final_beta={self.args.beta_end}/'
 
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
 
-        
         if self.args.stage == 0 or self.args.stage == 1: 
             cdna_filename = f'sv2p_cdna_state_dict_{epoch}.pth'
             checkpoint_name_cdna = checkpoint_path + cdna_filename
@@ -313,29 +328,79 @@ class SV2PTrainer:
 
     def load_stochastic_model(self): 
         self.copy_state_dict(self.det_model, self.stoc_model)
+    
+    def predict(self, inputs, unseen): 
+        """ ground_truth is also known as targets in other scripts, but 
+        is named differently here as targets is already used for the internal targets to train SV2P. 
+        """ 
+        z = self.sampler.sample_prior((inputs.size(0), 1, 8, 8)).to(self.args.device)
+        hidden = None 
+        predicted_frames = torch.zeros(1, unseen.size(1), 1, 64, 64, device = self.args.device)
+
+        total_len = inputs.size(1) + unseen.size(1)
         
+        with torch.no_grad(): 
+            for t in range(total_len):
+                if t < inputs.size(1): # seen data
+                    x_t = inputs[:, t, :, :, :]
+
+                    if self.args.stage == 0: 
+                        predictions_t, hidden, _, _ = self.det_model(
+                                                x_t, hidden_states=hidden)
+                    else: 
+                        predictions_t, hidden, _, _ = self.stoc_model(inputs = x_t, conditions = z,
+                                                        hidden_states=hidden)
+
+                else: 
+                    x_t = predictions_t # use predicted x_t instead of actual x_t
+                    if self.args.stage == 0: 
+                        predictions_t, hidden, _, _ = self.det_model(
+                                                x_t, hidden_states=hidden)
+                    else: 
+                        predictions_t, hidden, _, _ = self.stoc_model(inputs = x_t, conditions = z,
+                                                    hidden_states=hidden)
+
+                    predicted_frames[:, t-inputs.size(1)] = predictions_t
+
+        return predicted_frames
+
+    def plot_predictions(self, input, unseen): 
+        predicted = self.predict(input, unseen)
+        predicted = predicted.squeeze(0)
+        unseen = unseen.squeeze(0)
+
+        empty_channel = torch.full_like(predicted, 0)
+        stitched_video = torch.cat((predicted, empty_channel, unseen), 1)
+        stitched_frames = torchvision.utils.make_grid(stitched_video, stitched_video.size(0))    
+        stitched_wandb = wandb.Image(stitched_frames)
+
+        return stitched_wandb
+
 parser = argparse.ArgumentParser()
-parser.add_argument('--epochs', default=10, type=int)
-
+parser.add_argument('--dataset', default = "BouncingBall_50", type = str, 
+                    help = "choose between [MovingMNIST, BouncingBall_50]")
+parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--model', default="cdna", type=str)
-parser.add_argument('--stage', default=1, type=int)
-# parser.add_argument('--beta', default=1, type=float)
+parser.add_argument('--stage', default=0, type=int)
+parser.add_argument('--subdirectory', default="testing", type=str)
 
-parser.add_argument('--save_every', default=25, type=int)
+parser.add_argument('--save_every', default=5, type=int)
 parser.add_argument('--learning_rate', default=1e-4, type=float)
-parser.add_argument('--batch_size', default=52, type=int)
+parser.add_argument('--batch_size', default=1, type=int)
 parser.add_argument('--clip', default=10, type=int)
 
 parser.add_argument('--beta_start', default=0, type=float) # should not change generally
 parser.add_argument('--beta_end', default=0.001, type=float)
 
+parser.add_argument('--wandb_on', default=True, type=str)
+
 # Load in model
 # state_dict_path_det = "saves/sv2p/stage0/finetuned2/sv2p_cdna_state_dict_299.pth"
 # state_dict_path_det = "saves/sv2p/v2/stage1/finetuned/sv2p_state_dict_199.pth" 
 # state_dict_path_det = "/vol/bitbucket/mc821/VideoPrediction/saves/sv2p/stage0/finetuned3/sv2p_cdna_state_dict_25.pth"
-state_dict_path_det = None 
-state_dict_path_stoc = "saves/sv2p/stage2/finetuned1/sv2p_cdna_state_dict_99.pth" 
-state_dict_posterior = "saves/sv2p/stage2/finetuned1/sv2p_posterior_state_dict_99.pth"
+
+# state_dict_path_stoc = "saves/sv2p/stage2/finetuned1/sv2p_cdna_state_dict_99.pth" 
+# state_dict_posterior = "saves/sv2p/stage2/finetuned1/sv2p_posterior_state_dict_99.pth"
 
 def main():
     seed = 128
@@ -344,17 +409,30 @@ def main():
 
     args = parser.parse_args()
 
+    global wandb_on 
+    wandb_on = args.wandb_on 
+    if wandb_on: 
+        if args.subdirectory == "testing":
+            wandb.init(project="Testing")
+        else:  
+            wandb.init(project=f"{args.model}_{args.dataset}_stage={args.stage}")
+            
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
     else:
         args.device = torch.device('cpu')
 
+    if args.dataset == "BouncingBall_50": 
+        state_dict_path_det = "saves/BouncingBall_50/sv2p/stage0/sv2p_cdna_state_dict_99.pth" 
+        state_dict_path_stoc = None 
+        state_dict_posterior = None 
+
     # Set up logging
     log_fname = f'{args.model}_stage={args.stage}_{args.epochs}.log'
     if args.stage == 3: 
-        log_dir = f"logs/{args.model}/stage{args.stage}/finalB={args.beta_end}/"
+        log_dir = f"logs/{args.dataset}/{args.model}/stage{args.stage}/{args.subdirectory}/finalB={args.beta_end}/"
     else: 
-        log_dir = f"logs/{args.model}/stage{args.stage}/finetuned2/"
+        log_dir = f"logs/{args.dataset}/{args.model}/stage{args.stage}/{args.subdirectory}/"
 
     log_path = log_dir + log_fname
     if not os.path.isdir(log_dir):
@@ -362,26 +440,45 @@ def main():
     logging.basicConfig(filename=log_path, filemode='w+', level=logging.INFO)
     logging.info(args)
 
-    if state_dict_path_det: 
-        logging.info(f"State Dictionary Path (Deterministic) is: {state_dict_path_det}")
-    elif state_dict_path_stoc: 
-        logging.info(f"State Dictionary Path (Stochastic) is: {state_dict_path_stoc}")
-    else: 
-        logging.info("Training network from scratch")
+    if wandb_on: 
+        wandb.config.update(args)
 
     # Datasets
-    train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
-    train_loader = torch.utils.data.DataLoader(
-                dataset=train_set,
-                batch_size=args.batch_size,
-                shuffle=True)
+    if args.dataset == "MovingMNIST": 
+        train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=False)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set,
+                    batch_size=args.batch_size,
+                    shuffle=True)
+
+        val_set = MovingMNISTDataLoader(root='dataset/mnist', train=False, download=False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set,
+                    batch_size=args.batch_size,
+                    shuffle=True)
+
+    elif args.dataset == "BouncingBall_50": # use the 64 X 64 version 
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/bigger_64/50/train')
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = BouncingBallDataLoader('dataset/bouncing_ball/bigger_64/50/val')
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+    else: 
+        raise NotImplementedError
+        
 
     training_steps = len(train_loader) * args.epochs
     beta_scheduler = LinearScheduler(training_steps, args.beta_start, args.beta_end)
 
-    if args.model == "cdna":
-        trainer = SV2PTrainer(state_dict_path_det, state_dict_path_stoc, state_dict_posterior, beta_scheduler, args=args)  
-        trainer.train(train_loader)
+    trainer = SV2PTrainer(state_dict_path_det, state_dict_path_stoc, state_dict_posterior, beta_scheduler, args=args)  
+    trainer.train(train_loader)
         
     logging.info(f"Completed {args.stage} training")
 

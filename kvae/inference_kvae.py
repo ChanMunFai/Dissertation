@@ -12,12 +12,14 @@ import torchvision
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple 
 from kvae.elbo_loss import ELBO
 from kvae.model_kvae import KalmanVAE
-from data.MovingMNIST import MovingMNIST
-from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
+from kvae.model_kvae_mod import KalmanVAEMod
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.bouncing_ball import BouncingBallDataLoader
+from dataloader.healing_mnist import HealingMNISTDataLoader
 
 def load_dataset(dataset, batch_size): 
     if dataset == "MovingMNIST": 
-        train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+        train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set,
                     batch_size=batch_size,
@@ -36,6 +38,13 @@ def load_dataset(dataset, batch_size):
                     dataset=train_set, 
                     batch_size=batch_size, 
                     shuffle=False)
+
+    elif dataset == "HealingMNIST_20": 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/v1/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=True)
     else: 
         raise NotImplementedError
 
@@ -50,7 +59,12 @@ def load_dataset(dataset, batch_size):
 
 def load_kvae(Args): 
     args = Args()
-    kvae = KalmanVAE(args = args).to(args.device)
+    if args.model == "KVAE": 
+        kvae = KalmanVAE(args = args).to(args.device)
+    elif args.model == "KVAE_mod": 
+        kvae = KalmanVAEMod(args = args).to(args.device)
+    else: 
+        raise NotImplementedError
     state_dict = torch.load(args.state_dict_path, map_location = args.device)
     kvae.load_state_dict(state_dict)
 
@@ -142,7 +156,10 @@ def plot_predictions_overlap(x, target, pred_len, args):
 
     x_predicted, _, _ = kvae.predict(x, pred_len)
     print("Size of Predictions:", x_predicted.size())
-    
+
+    # Binarise predictions 
+    x_predicted = torch.where(x_predicted > 0.5, 1.0, 0.0)
+
     for batch_item, i in enumerate(x_predicted):
         output_dir_pred = f"results/{args.dataset}/KVAE/{args.subdirectory}/Overlapped_Predictions/"
         if not os.path.exists(output_dir_pred):
@@ -315,18 +332,40 @@ class Modified_ELBO_50_1LSTM:
     scale = 0.3
     state_dict_path = "saves/BouncingBall_50/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_89.pth"
 
+class KVAE_HealingMNIST_v1:
+    subdirectory = "a_dim=32_z_dim=16"
+    dataset = "HealingMNIST_20"
+    model = 'KVAE_mod'
+    alpha = "rnn"
+    lstm_layers = 1
+    x_dim = 1
+    a_dim = 32
+    z_dim = 16
+    K = 3
+    device = "cpu"
+    scale = 0.3
+    state_dict_path = "saves/HealingMNIST_20/kvae_mod/v1/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_89.pth"
+ 
 if __name__ == "__main__": 
-    args1 = Ex1_Args
-    args2 = Ex2_Args
-    args3 = Ex3_Args
-    args_bb20 = Ex20_Args
-    args_bonus = Bonus_Args
+    # args1 = Ex1_Args
+    # args2 = Ex2_Args
+    # args3 = Ex3_Args
+    # args_bb20 = Ex20_Args
+    # args_bonus = Bonus_Args
 
-    args_bb20_mod = Modified_ELBO_20_Args
-    args_bonus_mod = Modified_ELBO_50_Bonus_Args
-    args1_mod = Modified_ELBO_50_1LSTM
+    # args_bb20_mod = Modified_ELBO_20_Args
+    # args_bonus_mod = Modified_ELBO_50_Bonus_Args
+    # args1_mod = Modified_ELBO_50_1LSTM
 
-    data, target = load_dataset("BouncingBall_50", batch_size = 32)
+    args_hmnist_v1 = KVAE_HealingMNIST_v1
+
+    data, target = load_dataset("HealingMNIST_20", batch_size = 32)
+
+    # plot_predictions(data, target, 20, args_hmnist_v1)
+    # plot_predictions_diff_colours(data, target, 20, args_hmnist_v1)
+    plot_predictions_overlap(data, target, 20, args_hmnist_v1)
+
+    # data, target = load_dataset("BouncingBall_50", batch_size = 32)
     # data, target = load_dataset("BouncingBall_20", batch_size = 32)
 
     ### Plot predictions for Bouncing Ball 50 
@@ -404,7 +443,7 @@ if __name__ == "__main__":
         plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
         plt.close('all')
 
-    plot_mse_bb50()
+    # plot_mse_bb50()
     # plot_mse_bb20()
 
 

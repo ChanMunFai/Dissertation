@@ -30,9 +30,9 @@ class Ex4_Args:
     factor = 1
     state_dict_path = "saves/BouncingBall_50/kvae_hier/v1/levels=3/factor=1/kvae_state_dict_scale_89.pth"
 
-def load_dataset(dataset, batch_size): 
+def load_dataset(dataset, batch_size, seen_len = 50): 
     if dataset == "BouncingBall_200": 
-        train_set = BouncingBallDataLoader('dataset/bouncing_ball/200/train', seen_len = 50)
+        train_set = BouncingBallDataLoader('dataset/bouncing_ball/200/train', seen_len = seen_len)
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
                     batch_size=batch_size, 
@@ -49,12 +49,12 @@ def load_dataset(dataset, batch_size):
 if __name__ == "__main__": 
     args = Ex4_Args
 
-    data, target = load_dataset("BouncingBall_200", batch_size = 32)
+    data, target = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 50)
     # print(data.shape, target.shape)
     
     # plot_predictions(data, target, 150, args)
-    plot_predictions_diff_colours(data, target, 150, args)
-    plot_predictions_overlap(data, target, 150, args)
+    # plot_predictions_diff_colours(data, target, 150, args)
+    # plot_predictions_overlap(data, target, 150, args)
 
     def plot_mse_bb200(): 
         ### MSE over time 
@@ -81,7 +81,50 @@ if __name__ == "__main__":
         plt.savefig(output_dir + f"KVAE_loss_over_time.jpeg")
         plt.close('all')
 
-    plot_mse_bb200()
+    def plot_mse_fewshot(): 
+        data_1, target_1 = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 1)
+        data_5, target_5 = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 5)
+        data_10, target_10 = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 10)
+        data_20, target_20 = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 20)
+        data_100, target_100 = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 100)
+        data, target = load_dataset("BouncingBall_200", batch_size = 32, seen_len = 50)
+
+        ### MSE over time 
+        mse_kvae_1 = calc_model_losses_over_time(data_1, target_1, 150, args)
+        mse_kvae_5 = calc_model_losses_over_time(data_5, target_5, 150, args)
+        mse_kvae_10 = calc_model_losses_over_time(data_10, target_10, 150, args)
+        mse_kvae_20 = calc_model_losses_over_time(data_20, target_20, 150, args)
+        mse_kvae_50 = calc_model_losses_over_time(data, target, 150, args)
+        mse_kvae_100 = calc_model_losses_over_time(data, target, 100, args)
+              
+        mse_black = calc_black_losses_over_time(target)
+        mse_last_seen = calc_last_seen_losses_over_time(data, target)
+
+        ### Plotting 
+        plt.plot(mse_kvae_1, label="Seen Frames - 1") 
+        plt.plot(mse_kvae_5, label="Seen Frames - 5") 
+        plt.plot(mse_kvae_10, label="Seen Frames - 10")    
+        plt.plot(mse_kvae_20, label="Seen Frames - 20")    
+        plt.plot(mse_kvae_50, label="Seen Frames - 50")  
+        plt.plot(mse_kvae_100, label="Seen Frames - 100")  
+        plt.plot(mse_black, label="Black")
+        plt.plot(mse_last_seen, label = "Last Seen Frame")
+
+        plt.title("MSE between ground truth and predicted frame over time")
+        plt.ylabel('MSE')
+        plt.xlabel('Time')
+        plt.xticks(np.arange(0, len(mse_black), 10))
+        plt.legend(loc="upper left")
+
+        output_dir = f"plots/BouncingBall_200/KVAE_Hier/"
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+        plt.savefig(output_dir + f"KVAE_fewshot.jpeg")
+        plt.close('all')
+
+
+    # plot_mse_bb200()
+    plot_mse_fewshot()
     
 
 

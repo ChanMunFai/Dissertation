@@ -25,8 +25,9 @@ class KvaeEncoder(nn.Module):
         super(KvaeEncoder, self).__init__()
         self.input_channels = input_channels
         self.input_size = input_size
-        if self.input_size != 32 and self.input_size != 64: 
-            raise NotImplementedError
+        if self.input_size != 32 and self.input_size != 64 \
+            and self.input_size != 28: 
+                raise NotImplementedError
 
         self.a_dim = a_dim
         self.encode = nn.Sequential(
@@ -45,6 +46,9 @@ class KvaeEncoder(nn.Module):
             elif self.input_size == 32: 
                 self.mu_out = nn.Linear(288, self.a_dim)
                 self.log_var_out = nn.Linear(288, self.a_dim) 
+            elif self.input_size == 28: 
+                self.mu_out = nn.Linear(128, self.a_dim)
+                self.log_var_out = nn.Linear(128, self.a_dim) 
         else: 
             raise NotImplementedError 
         
@@ -181,7 +185,7 @@ class DecoderSimple(nn.Module):
     Arguments: 
         input_dim: dimension of latent variable 
         output_channels: typically 1 or 3 
-        output_size: 32 or 64
+        output_size: 28, 32 or 64
     """
     def __init__(self, input_dim, output_channels, output_size):
         super(DecoderSimple, self).__init__()
@@ -191,6 +195,8 @@ class DecoderSimple(nn.Module):
             self.latent_size = 16 
         elif self.output_size == 32: 
             self.latent_size = 8 
+        elif self.output_size == 28: 
+            self.latent_size = 7 
         else: 
             raise NotImplementedError
 
@@ -251,24 +257,24 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 if __name__ == "__main__":
-    encoder = KvaeEncoder(input_channels=1, input_size = 32, a_dim =2 )
-    x_seq_sample = torch.rand(32, 10, 1, 32, 32)
-    print("Number of parameters in encoder", count_parameters(encoder))
-    a_mu, a_log_var, encoder_shape = encoder(x_seq_sample)
+    # encoder = KvaeEncoder(input_channels=1, input_size = 32, a_dim =2 )
+    # x_seq_sample = torch.rand(32, 10, 1, 32, 32)
+    # print("Number of parameters in encoder", count_parameters(encoder))
+    # a_mu, a_log_var, encoder_shape = encoder(x_seq_sample)
     # print(a_mu.size())
     # print(a_log_var.size())
     # print(encoder_shape) 
 
-    encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = 2)
-    print("Number of parameters in encoder", count_parameters(encoder))
-    x_seq_sample = torch.rand(32, 10, 1, 64, 64)
-    a_mu, a_log_var, encoder_shape = encoder(x_seq_sample)
+    # encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = 2)
+    # print("Number of parameters in encoder", count_parameters(encoder))
+    # x_seq_sample = torch.rand(32, 10, 1, 64, 64)
+    # a_mu, a_log_var, encoder_shape = encoder(x_seq_sample)
     # print(a_mu.size())
     # print(a_log_var.size())
     # print(encoder_shape) 
 
-    decoder = Decoder64(a_dim = 2, enc_shape = encoder_shape, device = "cpu")
-    print("Number of parameters in decoder", count_parameters(decoder))
+    # decoder = Decoder64(a_dim = 2, enc_shape = encoder_shape, device = "cpu")
+    # print("Number of parameters in decoder", count_parameters(decoder))
     # a_seq_sample = torch.rand(32, 10, 2)
     # decoded = decoder(a_seq_sample)
     # print(decoded.size())
@@ -280,18 +286,28 @@ if __name__ == "__main__":
     # print(a_log_var.size())
     # print("Number of parameters in encoder", count_parameters(encoder))
 
-    decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 64)
-    a_seq_sample = torch.rand(32, 10, 2)
-    decoded = decoder(a_seq_sample)
-    print("Size of xhat", decoded.size())
-    print("Number of parameters in Simple Decoder (64)", count_parameters(decoder))
+    # decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 64)
+    # a_seq_sample = torch.rand(32, 10, 2)
+    # decoded = decoder(a_seq_sample)
+    # print("Size of xhat", decoded.size())
+    # print("Number of parameters in Simple Decoder (64)", count_parameters(decoder))
 
-    decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 32)
-    a_seq_sample = torch.rand(32, 10, 2)
-    decoded = decoder(a_seq_sample)
-    print("Size of xhat", decoded.size())
-    print("Number of parameters in Simple Decoder (32)", count_parameters(decoder))
+    # decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 32)
+    # a_seq_sample = torch.rand(32, 10, 2)
+    # decoded = decoder(a_seq_sample)
+    # print("Size of xhat", decoded.size())
+    # print("Number of parameters in Simple Decoder (32)", count_parameters(decoder))
     
+    ### 1 X 28 X 28 (HealingMNIST)
+    encoder = KvaeEncoder(input_channels=1, input_size = 28, a_dim = 2)
+    data = torch.randn(32, 20, 1, 28, 28)
+    a_mu, a_log_var, _ = encoder.forward(data)
+    # print(a_mu.shape, a_log_var.shape)
+    print("Number of parameters in Encoder (28)", count_parameters(encoder))
+
+    decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 28)
+    decoded = decoder(a_mu)
+    print(decoded.shape)
 
 
     

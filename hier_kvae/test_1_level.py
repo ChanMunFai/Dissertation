@@ -32,7 +32,7 @@ kvae_hier = HierKalmanVAE(args = args).to(args.device)
 kvae_hier.a1 = kvae_mod.a1
 kvae_hier.C = kvae_mod.C
 
-x = torch.randn(5, 20, 1, 32, 32) # BS X T X 1 X H X W
+x = torch.randn(1, 20, 1, 32, 32) # BS X T X 1 X H X W
 
 def test_interpolate_matrices(): 
     with torch.no_grad(): 
@@ -74,4 +74,75 @@ def test_interpolate_matrices():
 def test_prediction(): 
     with torch.no_grad():
         predictions_hier = kvae_hier.predict(x, pred_len = 20)
+        predictions_mod, *_ = kvae_mod.predict(x, pred_len = 20)
+        # print(torch.allclose(predictions_hier.double(), predictions_mod.double())) #  
+        # print(predictions_hier[0,0])
+        # print(predictions_mod[0,0])
+
+        ### Do predictions manually 
+        (B, T, C, H, W) = x.size()
+        a_sample, *_ = kvae_hier._encode(x)
+        filtered, pred, hierachical, S_tensor, A_t, C_t, D_t, weights = kvae_hier._kalman_posterior(a_sample) 
+
+        ### KVAE hier 
+        mu_z, sigma_z = filtered  
+        mu_z = torch.transpose(mu_z, 1, 0)
+        sigma_z = torch.transpose(sigma_z, 1, 0)
+
+        z_dist = MultivariateNormal(mu_z.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z))
+        z_sample = z_dist.sample()
+
+        pred_weights = torch.zeros((B, 20, kvae_hier.K))
+
+        z_sequence = torch.zeros((B, 20, args.z_dim))
+        a_sequence = torch.zeros((B, 20, args.a_dim))
+        a_t = a_sample[:, -1, :].unsqueeze(1)
+        z_t = z_sample[:, -1, :].to(torch.float32) 
+
+        hidden_state, cell_state = kvae_hier.state_dyn_net
+        dyn_emb, kvae_hier.state_dyn_net = kvae_hier.parameter_net(a_t, (hidden_state, cell_state))
+        dyn_emb = kvae_hier.alpha_out(dyn_emb)
+
+        weights = dyn_emb.softmax(-1).squeeze(1)
+        pred_weights[:,0] = weights
+
+        for t in range(20): 
+                for l in reversed(range(args.levels)): 
+                    factor_level = args.factor ** l
+
+                    A_t = torch.matmul(weights, kvae_hier.A[:,l].reshape(kvae_hier.K, -1)).reshape(B, kvae_hier.z_dim, kvae_hier.z_dim) # BS X z_dim x z_dim 
+                    D_t = torch.matmul(weights, kvae_hier.D[:,l].reshape(kvae_hier.K, -1)).reshape(B, kvae_hier.z_dim, kvae_hier.z_dim)
+
+                    if l == args.levels - 1 and l!=0: # highest level 
+                        if t % factor_level == 0: 
+                            j_t[:,l,:,:] = torch.matmul(A_t, j_t[:,l,:,:]) # BS X 4 X 1
+                        
+                        j_sequence[:,l,t,:,:] = j_t[:,l,:,:] # copy over mean 
+
+                    elif l < args.levels -1 and l!=0:
+                        if t % factor_level == 0: 
+                            j_t[:,l,:,:] = torch.matmul(A_t, j_t[:,l,:,:]) + torch.matmul(D_t, j_sequence[:,l+1,t,:,:])
+                        
+                        j_sequence[:,l,t,:,:] = j_t[:,l,:,:]
+
+                    elif l == 0: 
+                        if args.levels == 1: 
+                            z_t = torch.matmul(A_t, z_t.unsqueeze(-1)).squeeze(-1) # BS X z_dim 
+                        elif args.levels > 1: 
+                            z_t = torch.matmul(A_t, z_t.unsqueeze(-1)) + torch.matmul(D_t, j_sequence[:,l+1,t,:,:])
+                            z_t = z_t.squeeze(-1)
+
+                        # a_t|z_t
+                        C_t = torch.matmul(weights, kvae_hier.C.reshape(kvae_hier.K, -1)).reshape(B, kvae_hier.a_dim, kvae_hier.z_dim) # BS X z_dim x z_dim 
+                        a_t = torch.matmul(C_t, z_t.unsqueeze(-1))
+                        
+                        z_sequence[:,t,:] = z_t
+                        a_sequence[:,t,:] = a_t.squeeze(-1)
+
+        pred_seq = kvae_hier._decode(a_sequence).reshape(B,20,C,H,W) # BS X pred_len X C X H X W 
+    
+        print(pred_seq.shape)
+
+test_prediction()
+
         

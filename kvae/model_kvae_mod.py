@@ -29,11 +29,14 @@ class KalmanVAEMod(nn.Module):
         self.lstm_layers = self.args.lstm_layers
 
         if self.args.dataset == "MovingMNIST": 
-            self.encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = 2).to(self.device)
-            self.decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 64).to(self.device)
+            self.encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = self.args.a_dim).to(self.device)
+            self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 64).to(self.device)
         elif self.args.dataset == "BouncingBall_20" or self.args.dataset == "BouncingBall_50": 
             self.encoder = CNNFastEncoder(1, self.a_dim).to(self.device)
-            self.decoder = DecoderSimple(input_dim = 2, output_channels = 1, output_size = 32).to(self.device)
+            self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 32).to(self.device)
+        elif self.args.dataset == "HealingMNIST_20": 
+            self.encoder = CNNFastEncoder(1, self.a_dim).to(self.device)
+            self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 32).to(self.device)
 
         if self.alpha == "mlp": 
             self.parameter_net = MLP(self.a_dim, 50, self.K).to(self.device)
@@ -167,6 +170,7 @@ class KalmanVAEMod(nn.Module):
         filtered, pred, S_tensor, A_t, C_t, weights  = self._kalman_posterior(a_sample)
         mu_z_pred = pred[0]
 
+
         x_hat = self._decode(a_sample).reshape(B,T,C,H,W)
         x_mu = x_hat # assume they are the same for now
 
@@ -206,9 +210,6 @@ class KalmanVAEMod(nn.Module):
     def predict(self, input, pred_len, return_weights = False):
         """ Predicts a sequence of length pred_len given input. 
         """
-
-        # To be tested
-
         ### Seen data
         (B, T, C, H, W) = input.size()
 

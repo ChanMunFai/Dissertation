@@ -20,7 +20,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ExponentialLR
 
 import matplotlib.pyplot as plt
-from data.MovingMNIST import MovingMNIST
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.healing_mnist import HealingMNISTDataLoader
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple, CNNFastEncoder  
 
 import wandb
@@ -35,7 +36,11 @@ class EncoderDecoder(nn.Module):
             self.encoder = KvaeEncoder(input_channels=1, input_size = 64, a_dim = self.args.a_dim).to(self.device)
             self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 64).to(self.device)
             # self.decoder = Decoder64(a_dim = 2, enc_shape = [32, 7, 7], device = self.device).to(self.device) # change this to encoder shape
-    
+        
+        elif self.args.dataset == "HealingMNIST_20": 
+            self.encoder = CNNFastEncoder(1, self.args.a_dim).to(self.device)
+            self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 32).to(self.device)
+
         self._init_weights()
 
     def _init_weights(self):
@@ -213,7 +218,7 @@ class EncDecTrainer:
         return reconstructed_wandb, ground_truth_wandb
 
     def _save_model(self, epoch):  
-        checkpoint_path = f'saves/{self.args.dataset}/enc_dec/{self.args.subdirectory}/scheduler_step={self.args.scheduler_step}/'
+        checkpoint_path = f'saves/{self.args.dataset}/enc_dec/{self.args.subdirectory}/a_dim={self.args.a_dim}/'
 
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
@@ -227,8 +232,8 @@ class EncDecTrainer:
         return checkpoint_name
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "MovingMNIST", type = str, 
-                    help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50]")
+parser.add_argument('--dataset', default = "HealingMNIST_20", type = str, 
+                    help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50, HealingMNIST_20]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
 parser.add_argument('--model', default="Enc_Dec", type=str)
@@ -271,9 +276,11 @@ def main():
         state_dict_path = None 
     elif args.dataset == "BouncingBall_50": 
         state_dict_path = None 
+    elif args.dataset == "HealingMNIST_20": 
+        state_dict_path = None 
        
     # set up logging
-    log_fname = f'{args.model}_steps={args.scheduler_step}_epochs={args.epochs}.log'
+    log_fname = f'{args.model}_a_dim={args.a_dim}_epochs={args.epochs}.log'
     log_dir = f"logs/{args.dataset}/{args.model}/{args.subdirectory}/"
     log_path = log_dir + log_fname
     if not os.path.isdir(log_dir):
@@ -285,17 +292,31 @@ def main():
 
     # Datasets
     if args.dataset == "MovingMNIST": 
-        train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+        train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set,
                     batch_size=args.batch_size,
                     shuffle=True)
 
-        val_set = MovingMNIST(root='dataset/mnist', train=False, download=True)
+        val_set = MovingMNISTDataLoader(root='dataset/mnist', train=False, download=True)
         val_loader = torch.utils.data.DataLoader(
                     dataset=val_set,
                     batch_size=args.batch_size,
                     shuffle=True)
+
+    elif args.dataset == "HealingMNIST_20": 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/20/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = HealingMNISTDataLoader('dataset/HealingMNIST/20/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
     else: 
         raise NotImplementedError
 
