@@ -10,7 +10,7 @@ import codecs
 import matplotlib.pyplot as plt
 
 class MovingMNISTDataLoader(data.Dataset):
-    """`MovingMNIST <http://www.cs.toronto.edu/~nitish/unsupervised_video/>`_ Dataset.
+    """MovingMNIST <http://www.cs.toronto.edu/~nitish/unsupervised_video/>`_ Dataset.
 
     Args:
         root (string): Root directory of dataset where ``processed/training.pt``

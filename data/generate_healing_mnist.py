@@ -32,7 +32,8 @@ def heal_image(img, seq_len, square_count, square_size, noise_ratio):
     squares_begin = np.random.randint(0, seq_len - square_count)
     squares_end = squares_begin + square_count
     rotations = []
-    rotation_steps = [360*2/seq_len]*seq_len
+    # rotation_steps = [360*2/seq_len]*seq_len
+    rotation_steps = [18] * seq_len
     for idx, rotation in enumerate(get_rotations(img, rotation_steps)):
         if idx >= squares_begin and idx < squares_end:
             rotation = apply_square(rotation, square_size)
@@ -40,9 +41,9 @@ def heal_image(img, seq_len, square_count, square_size, noise_ratio):
     return rotations, rotation_steps
 
 class HealingMNIST():
-    def __init__(self, filepath, seq_len=5, square_count=3, square_size=5, noise_ratio=0.15, digits=range(10)):
-        mnist_train = [(img, label) for img, label in zip(mnist.train_images()[:10000], mnist.train_labels()[:10000]) if label in digits]
-        mnist_test = [(img, label) for img, label in zip(mnist.test_images()[:1000], mnist.test_labels()[:1000]) if label in digits]
+    def __init__(self, filepath, seq_len=5, square_count=3, square_size=5, noise_ratio=0.15, digits=range(10), train_len = 1, test_len = 1):
+        mnist_train = [(img, label) for img, label in zip(mnist.train_images()[:train_len], mnist.train_labels()[:train_len]) if label in digits]
+        mnist_test = [(img, label) for img, label in zip(mnist.test_images()[:test_len], mnist.test_labels()[:test_len]) if label in digits]
 
         train_images = []
         test_images = []
@@ -71,13 +72,13 @@ class HealingMNIST():
 
         
 if __name__ == "__main__": 
-    # filepath = 'dataset/HealingMNIST/5/'
-    # hmnist = HealingMNIST(filepath, seq_len=10, square_count=0, noise_ratio = 0)
+    filepath = 'dataset/HealingMNIST/50/'
+    hmnist = HealingMNIST(filepath, seq_len=100, square_count=0, noise_ratio = 0, train_len = 100, test_len = 0)
 
-    obj = np.load("dataset/HealingMNIST/5/train/2.npz")
+    # obj = np.load("dataset/HealingMNIST/5/train/2.npz")
 
-    plt.imshow(np.concatenate(obj["images"], axis=1))
-    plt.savefig("dataset/HealingMNIST/5/sample.jpeg")
+    # plt.imshow(np.concatenate(obj["images"], axis=1))
+    # plt.savefig("dataset/HealingMNIST/5/sample.jpeg")
 
     # obj = np.load("dataset/HealingMNIST/v2/train/1.npz")
     # plt.imshow(np.concatenate(obj["images"], axis=1))
