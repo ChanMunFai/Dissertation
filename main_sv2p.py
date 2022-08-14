@@ -140,9 +140,9 @@ class SV2PTrainer:
         example_unseen = torch.where(example_unseen > 0.5, 1.0, 0.0).unsqueeze(0)
 
         # self.predict(example_data, example_unseen)
-        # if wandb_on: 
-        #     predictions = self.plot_predictions(example_data, example_unseen) 
-        #     wandb.log({"Predictions": [predictions]})
+        if wandb_on: 
+            predictions = self.plot_predictions(example_data, example_unseen) 
+            wandb.log({"Predictions": [predictions]})
 
         for epoch in range(self.args.epochs):
             print("Epoch:", epoch)
@@ -181,7 +181,7 @@ class SV2PTrainer:
                 q = torch.distributions.Normal(prior_mean,prior_std)
 
                 kld_loss = torch.distributions.kl_divergence(p, q).sum()/self.args.batch_size
-                print("KLD Divergence is", kld_loss)
+                # print("KLD Divergence is", kld_loss)
 
                 # recurrent forward pass
                 for t in range(inputs.size(1)):
@@ -201,14 +201,14 @@ class SV2PTrainer:
                     loss_t = self.criterion(predictions_t, targets_t) # compare x_t+1 hat with x_t+1
                     recon_loss += loss_t/inputs.size(0) # image-wise MSE summed over all time steps
 
-                print("recon_loss", recon_loss)
+                # print("recon_loss", recon_loss)
                 total_loss += recon_loss
 
                 if self.args.stage == 3: 
                     beta_value = self.beta_scheduler.step()
                     total_loss += beta_value * kld_loss
 
-                print("Total loss after KLD", total_loss)
+                # print("Total loss after KLD", total_loss)
                     
                 self.optimizer.zero_grad()
                 total_loss.backward() 
@@ -381,7 +381,7 @@ parser.add_argument('--dataset', default = "BouncingBall_50", type = str,
                     help = "choose between [MovingMNIST, BouncingBall_50]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--model', default="cdna", type=str)
-parser.add_argument('--stage', default=0, type=int)
+parser.add_argument('--stage', default=3, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
 
 parser.add_argument('--save_every', default=5, type=int)
@@ -392,7 +392,7 @@ parser.add_argument('--clip', default=10, type=int)
 parser.add_argument('--beta_start', default=0, type=float) # should not change generally
 parser.add_argument('--beta_end', default=0.001, type=float)
 
-parser.add_argument('--wandb_on', default=True, type=str)
+parser.add_argument('--wandb_on', default=None, type=str)
 
 # Load in model
 # state_dict_path_det = "saves/sv2p/stage0/finetuned2/sv2p_cdna_state_dict_299.pth"
@@ -423,9 +423,9 @@ def main():
         args.device = torch.device('cpu')
 
     if args.dataset == "BouncingBall_50": 
-        state_dict_path_det = "saves/BouncingBall_50/sv2p/stage0/sv2p_cdna_state_dict_99.pth" 
-        state_dict_path_stoc = None 
-        state_dict_posterior = None 
+        state_dict_path_det = None 
+        state_dict_path_stoc = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_cdna_state_dict_19.pth"
+        state_dict_posterior = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_posterior_state_dict_19.pth"
 
     # Set up logging
     log_fname = f'{args.model}_stage={args.stage}_{args.epochs}.log'

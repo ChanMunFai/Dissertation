@@ -24,6 +24,7 @@ from hier_kvae.model_hier_kvae_v2 import HierKalmanVAE_V2
 from dataloader.moving_mnist import MovingMNISTDataLoader
 from dataloader.bouncing_ball import BouncingBallDataLoader
 from dataloader.healing_mnist import HealingMNISTDataLoader
+from dataloader.dancing_mnist import DancingMNISTDataLoader
 from utils import count_parameters
 
 import wandb
@@ -51,6 +52,7 @@ class HierKVAETrainer:
     
         if state_dict_path: 
             state_dict = torch.load(state_dict_path, map_location = self.args.device)
+            
             logging.info(f"Loaded State Dict from {state_dict_path}")
             
             self.model.load_state_dict(state_dict)
@@ -389,6 +391,32 @@ def main():
                     dataset=val_set, 
                     batch_size=args.batch_size, 
                     shuffle=True)
+
+    elif args.dataset == "DancingMNIST_20": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v1/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v1/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+                    
+    elif args.dataset == "DancingMNIST_20_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v2/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v2/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
                     
     else: 
         raise NotImplementedError
@@ -398,6 +426,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
