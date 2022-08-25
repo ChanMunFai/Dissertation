@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 
-from vrnn.conv_layers import Conv, Conv_64, Deconv
+from vrnn.modules import Conv, Deconv, FastEncoder, FastDecoder
 from utils import *
 
 # changing device
@@ -27,11 +27,9 @@ class VRNN(nn.Module):
 
         # embedding - embed xt to xt_tilde (dim h_dim)
         if self.h_dim == 1024: 
-            self.embed = Conv()
-        elif self.h_dim == 64: 
-            self.embed = Conv_64()
+            self.embed = Conv().to(device)
         else: 
-            print("Current parameters not supported.")
+            self.embed = FastEncoder(input_channels = 1, output_dim = self.h_dim).to(device) 
     
         #encoder - encode xt_tilde and h_t-1 into ht
         self.enc = nn.Sequential(
@@ -51,7 +49,10 @@ class VRNN(nn.Module):
             nn.Linear(z_dim, h_dim),
             nn.ReLU())
 
-        self.dec = Deconv(h_dim = h_dim)
+        if self.h_dim == 1024:
+            self.dec = Deconv(h_dim = h_dim).to(device)
+        else: 
+            self.dec = FastDecoder(input_dim = self.h_dim, output_channels = 1, output_size = 32).to(device)
 
         #prior - sample zt from h_t-1
         self.prior = nn.Sequential(
@@ -319,10 +320,11 @@ class VRNN(nn.Module):
         return torch.sum(torch.log(std + EPS) + torch.log(2*torch.pi)/2 + (x - mean).pow(2)/(2*std.pow(2)))
 
 if __name__ == "__main__": 
-    vrnn = VRNN(64, 1024, 32, 1)
+    vrnn = VRNN(x_dim = 32, h_dim = 10, z_dim = 10, n_layers = 1).to(device)
     print("Number of parameters in my Implementation of VRNN", count_parameters(vrnn))
 
-    print(vrnn)
+    data = torch.randn(5, 20, 1, 32, 32).to(device)
+    vrnn.forward(data)
 
     
 
