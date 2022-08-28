@@ -24,21 +24,15 @@ from scheduler import LinearScheduler
 from dataloader.moving_mnist import MovingMNISTDataLoader
 from dataloader.bouncing_ball import BouncingBallDataLoader
 from dataloader.healing_mnist import HealingMNISTDataLoader
+from dataloader.dancing_mnist import DancingMNISTDataLoader
 
 import wandb 
 
 class SV2PTrainer:
-    """
-    state_dict_path_det: path for state dictionary for a deterministic model 
-    state_dict_path_stoc: path for state dictionary for a stochastic model 
-    state_dict_posterior: path for state dictionary for a posterior model 
+    """ Trains SV2P model. 
 
-    This is differently defined from the original paper. Here, 
-        Deterministic model: cond channels = 0 (saved from Stage 0) 
-        Stochastic model: cond channels = 1 (saved and used in all other Stages)
-
-    Stages (new): 
-        0: train CDNA architecture only 
+    Stages: 
+        0: train (determistic) CDNA architecture only 
         1: update CDNA architecture to include Z from prior variables 
         2: Use Z from posterior but do not include KL divergence
         3. Use Z from posterior and include KL divergence 
@@ -49,6 +43,17 @@ class SV2PTrainer:
                 state_dict_path_posterior = None, 
                 beta_scheduler = None,  
                 *args, **kwargs):
+        """
+        Args: 
+            state_dict_path_det: path for state dictionary for a deterministic model 
+            state_dict_path_stoc: path for state dictionary for a stochastic model 
+            state_dict_posterior: path for state dictionary for a posterior model 
+            beta_scheduler: scheduler object to schedule the warmup of beta 
+
+        The models are differently defined from the original paper. Here, 
+        Deterministic model: cond channels = 0 (saved from Stage 0) 
+        Stochastic model: cond channels = 1 (saved and used in all other Stages)
+        """
 
         self.args = kwargs['args']
         self.writer = SummaryWriter()
@@ -75,10 +80,13 @@ class SV2PTrainer:
         
         # Posterior network
         if self.args.dataset == "BouncingBall_50": 
-            self.q_net = PosteriorInferenceNet(tbatch = 50).to(self.args.device) # figure out what tbatch is again (seqlen?)
+            self.q_net = PosteriorInferenceNet(tbatch = 50).to(self.args.device) 
         elif self.args.dataset == "MovingMNIST": 
-            self.q_net = PosteriorInferenceNet(tbatch = 10).to(self.args.device) # figure out what tbatch is again (seqlen?)
-
+            self.q_net = PosteriorInferenceNet(tbatch = 10).to(self.args.device) 
+        elif self.args.dataset == "DancingMNIST_20_v2" or self.args.dataset == "HealingMNIST_20": 
+            self.q_net = PosteriorInferenceNet(tbatch = 20).to(self.args.device)
+        else: 
+            raise NotImplementedError
         self.sampler = LatentVariableSampler()
 
         if self.args.stage == 2 or self.args.stage == 3: 
@@ -116,8 +124,7 @@ class SV2PTrainer:
         return inputs, targets
 
     def train(self, train_loader):
-        """
-        stage: 1, 2, or 3
+        """ Trains SV2P model. 
         """
 
         logging.info(f"Starting SV2P training on Stage {self.args.stage} for {self.args.epochs} epochs.")
@@ -134,10 +141,12 @@ class SV2PTrainer:
         example_data = example_data[0].clone().to(self.args.device)
         example_data = (example_data - example_data.min()) / (example_data.max() - example_data.min())
         example_data = torch.where(example_data > 0.5, 1.0, 0.0).unsqueeze(0)
+        example_data = example_data.float()
 
         example_unseen = example_unseen[0].clone().to(self.args.device)
         example_unseen = (example_unseen - example_unseen.min()) / (example_unseen.max() - example_unseen.min())
         example_unseen = torch.where(example_unseen > 0.5, 1.0, 0.0).unsqueeze(0)
+        example_unseen = example_unseen.float()
 
         # self.predict(example_data, example_unseen)
         if wandb_on: 
@@ -151,9 +160,10 @@ class SV2PTrainer:
             running_recon = 0
 
             for data, unseen in tqdm(train_loader):
-                data = data.to(self.args.device)
+                data = data.to(self.args.device).float()
                 data = (data - data.min()) / (data.max() - data.min())
-
+                data = torch.where(data > 0.5, 1.0, 0.0)
+                
                 self.optimizer.zero_grad(set_to_none=True)
 
                 # Separate data into inputs and targets
@@ -291,6 +301,11 @@ class SV2PTrainer:
             print('Saved Posterior model to '+checkpoint_name_posterior)
 
     def copy_state_dict(self, model1, model2):
+        """ Copies state dictionary from model 1 to model 2. 
+
+        Used to copy state dict from determnistic model to stochastic model, 
+        which has an additional channel for Z. 
+        """
 
         params1 = model1.named_parameters()
         params2 = model2.named_parameters()
@@ -330,8 +345,11 @@ class SV2PTrainer:
         self.copy_state_dict(self.det_model, self.stoc_model)
     
     def predict(self, inputs, unseen): 
-        """ ground_truth is also known as targets in other scripts, but 
-        is named differently here as targets is already used for the internal targets to train SV2P. 
+        """ Predicts future frames given some input. 
+
+        N.B. unseen is known as target in other scripts, but 
+        is named differently here as targets is already used 
+        to name the internal targets to train SV2P. 
         """ 
         z = self.sampler.sample_prior((inputs.size(0), 1, 8, 8)).to(self.args.device)
         hidden = None 
@@ -394,14 +412,6 @@ parser.add_argument('--beta_end', default=0.001, type=float)
 
 parser.add_argument('--wandb_on', default=None, type=str)
 
-# Load in model
-# state_dict_path_det = "saves/sv2p/stage0/finetuned2/sv2p_cdna_state_dict_299.pth"
-# state_dict_path_det = "saves/sv2p/v2/stage1/finetuned/sv2p_state_dict_199.pth" 
-# state_dict_path_det = "/vol/bitbucket/mc821/VideoPrediction/saves/sv2p/stage0/finetuned3/sv2p_cdna_state_dict_25.pth"
-
-# state_dict_path_stoc = "saves/sv2p/stage2/finetuned1/sv2p_cdna_state_dict_99.pth" 
-# state_dict_posterior = "saves/sv2p/stage2/finetuned1/sv2p_posterior_state_dict_99.pth"
-
 def main():
     seed = 128
     torch.manual_seed(seed)
@@ -426,6 +436,16 @@ def main():
         state_dict_path_det = None 
         state_dict_path_stoc = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_cdna_state_dict_19.pth"
         state_dict_posterior = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_posterior_state_dict_19.pth"
+    elif args.dataset == "HealingMNIST_20": 
+        state_dict_path_det =  None # "saves/HealingMNIST_20/sv2p/stage0/v1/sv2p_cdna_state_dict_49.pth" 
+        state_dict_path_stoc = "saves/HealingMNIST_20/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth" 
+        state_dict_posterior = None 
+    elif args.dataset == "DancingMNIST_20_v2": 
+        state_dict_path_det =  None # "saves/DancingMNIST_20_v2/sv2p/stage0/v1/sv2p_cdna_state_dict_49.pth" 
+        state_dict_path_stoc = "saves/DancingMNIST_20_v2/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth" 
+        state_dict_posterior = None 
+    else: 
+        raise NotImplementedError
 
     # Set up logging
     log_fname = f'{args.model}_stage={args.stage}_{args.epochs}.log'
@@ -470,6 +490,32 @@ def main():
                     batch_size=args.batch_size, 
                     shuffle=True)
 
+    elif args.dataset == "HealingMNIST_20": # use the 64 X 64 version 
+        train_set = HealingMNISTDataLoader('dataset/HealingMNIST/bigger_64/20/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = HealingMNISTDataLoader('dataset/HealingMNIST/bigger_64/20/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+    elif args.dataset == "DancingMNIST_20_v2": # use the 64 X 64 version 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/bigger_64/20/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = DancingMNISTDataLoader('dataset/DancingMNIST/bigger_64/20/', train = False)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+                
     else: 
         raise NotImplementedError
         

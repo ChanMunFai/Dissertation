@@ -1,4 +1,8 @@
-""" Source: https://github.com/kkew3/cse291g-sv2p/blob/master/src/sv2p/model.py """
+""" Source: https://github.com/kkew3/cse291g-sv2p/blob/master/src/sv2p/model.py 
+
+Models used for SV2P network. Specifically, this implements the 
+Posterior Network and Latent Sampler. 
+"""
 
 import typing
 
@@ -86,15 +90,13 @@ class LatentVariableSampler:
 
 if __name__ == "__main__":
     # Create tensor of size (BS X Seq Len X Channels X NC X W X H)
-    input_tensor = torch.rand(28, 10, 1, 64, 64)
+    input_tensor = torch.rand(1, 20, 1, 64, 64)
 
-    stacked_tensor = input_tensor.view(input_tensor.size(0), -1,
-                                input_tensor.size(-2), input_tensor.size(-1))
-
-    q_net = PosteriorInferenceNet(tbatch = 10) # temporal batch = 10
+    q_net = PosteriorInferenceNet(tbatch = 20) # temporal batch = 10
     mu, sigma = q_net(input_tensor)
 
     sampler = LatentVariableSampler()
+
     z = sampler.sample(mu, sigma)
 
     print(mu.shape)

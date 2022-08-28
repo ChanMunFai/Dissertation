@@ -1,3 +1,5 @@
+# To be deleted - not very useful 
+
 import os
 import math
 import logging

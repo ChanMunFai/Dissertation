@@ -6,6 +6,7 @@ Implementation of
     Convolutional LSTM Network: A Machine Learning Approach for Precipitation
     Nowcasting. NIPS.
 
+Implements the ConvLTSM layers, which are used to build the CDNA network. 
 """
 
 import typing
