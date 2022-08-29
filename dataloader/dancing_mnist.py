@@ -41,29 +41,29 @@ class DancingMNISTDataLoader(Dataset):
         return seq, target
 
 if __name__ == "__main__": 
-    train_dataset = DancingMNISTDataLoader("dataset/DancingMNIST/20/", train = True)
+    train_dataset = DancingMNISTDataLoader("dataset/DancingMNIST/20/v1/", train = True)
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
         num_workers=0,
         batch_size=2
     )
-    print(len(train_dataset))
+    # print(len(train_dataset))
     data, target = next(iter(train_loader))
     print(data.shape, target.shape)
     # print(torch.max(data), torch.min(data))
 
-    val_dataset = DancingMNISTDataLoader("dataset/DancingMNIST/20/", train = False)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        shuffle=True,
-        num_workers=0,
-        batch_size=2
-    )
-    print(len(val_dataset))
-    data, target = next(iter(val_loader))
-    print(data.shape, target.shape)
-    print(data.dtype)
+    # val_dataset = DancingMNISTDataLoader("dataset/DancingMNIST/20/", train = False)
+    # val_loader = torch.utils.data.DataLoader(
+    #     val_dataset,
+    #     shuffle=True,
+    #     num_workers=0,
+    #     batch_size=2
+    # )
+    # print(len(val_dataset))
+    # data, target = next(iter(val_loader))
+    # print(data.shape, target.shape)
+    # print(data.dtype)
 
     
    
