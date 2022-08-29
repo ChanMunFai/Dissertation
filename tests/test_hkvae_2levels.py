@@ -1,12 +1,6 @@
-# Test that outputs of 2 level hier KVAE 
-
-### Things to test: 
+# Test 2 level hier KVAE 
 # Hierachical latents copy over if they are not divisible by temporal factor 
 # Try for differing numbers of latents 
-
-### Think of a way to make the 2nd level redundant 
-
-# Another test will be to generate some processes
 
 import argparse 
 import numpy as np
