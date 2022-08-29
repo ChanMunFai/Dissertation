@@ -37,14 +37,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--name', default = 'bigger_64/50', action='store', nargs=1, required=False, help='The dataset name.'
+        '--name', default = 'bigger_64/200', action='store', nargs=1, required=False, help='The dataset name.'
     )
     parser.add_argument(
-        '--ntrain', action='store', required=False, type=int, default=5000,
+        '--ntrain', action='store', required=False, type=int, default=100,
         help='Number of training sample to generate.'
     )
     parser.add_argument(
-        '--ntest', action='store', required=False, type=int, default=100,
+        '--ntest', action='store', required=False, type=int, default=0,
         help='Number of test samples to generate.'
     )
     parser.add_argument(

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import cv2
 
 class DancingMNIST():
-    def __init__(self, filepath, seq_len=5, digits=range(10), train_len = 10000, test_len = 1000):
+    def __init__(self, filepath, seq_len=5, digits=range(10), train_len = 10000, test_len = 1000, output_size = 32):
         self.mnist_train = [(img, label) for img, label in zip(mnist.train_images()[:train_len], mnist.train_labels()[:train_len]) if label in digits]
         self.mnist_test = [(img, label) for img, label in zip(mnist.test_images()[:test_len], mnist.test_labels()[:test_len]) if label in digits]        
         
@@ -16,6 +16,7 @@ class DancingMNIST():
         # self.basic_cycle = ["down", "up", "up", "down"]
         self.basic_cycle = ["right", "down", "down", "left", "left", "up", "up", "right"] # assume start from up position 
         self.seq_len = seq_len 
+        self.output_size = output_size
 
     def generate_train(self): 
         train_filepath = self.filepath + "train/"
@@ -24,6 +25,14 @@ class DancingMNIST():
         for i, (img, label) in tqdm(enumerate(self.mnist_train)): 
             train_img = self.transform_image(img)
             train_img = np.asarray(train_img).astype(np.float32)
+
+            if self.output_size != 32: 
+                images = np.zeros((train_img.shape[0], self.output_size, self.output_size))
+                for t, img in enumerate(train_img): 
+                    img = cv2.resize(img, dsize = (self.output_size, self.output_size))
+                    images[t] = img
+                train_img = images 
+        
             train_img = np.where(train_img > 127, 0.5, 0) # binarise
             np.savez(path.join(train_filepath, f"{i}"), images=train_img)
         
@@ -243,13 +252,18 @@ class DancingMNIST():
             return position 
 
 if __name__ == "__main__": 
-    filepath = 'dataset/DancingMNIST/100/v2/' # more complicated shifting dynamics 
-    dancing_mnist = DancingMNIST(filepath, seq_len=200, train_len = 100, test_len = 0)
+    filepath = 'dataset/DancingMNIST/bigger_64/20/' # more complicated shifting dynamics 
+    dancing_mnist = DancingMNIST(filepath, seq_len=40, train_len = 10000, test_len = 1000, output_size = 64)
     dancing_mnist.generate_train()
     dancing_mnist.generate_test()
 
-    # obj = np.load("dataset/DancingMNIST/20/v2/train/0.npz")
+    # obj = np.load("dataset/DancingMNIST/bigger_64/20/train/0.npz")
     # img = obj["images"]
+    # print(img.shape)
+    # plt.imshow(np.concatenate(img, axis = 1))
+    # plt.savefig("dataset/DancingMNIST/bigger_64/20/sample_bordered.svg", format='svg', dpi = 1200)       
+
+
     # bordered_img = np.ones((40, 34, 34))
     # for t, image in enumerate(img): 
     #     bordered_img[t,1:33,1:33] = image
