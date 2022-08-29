@@ -113,37 +113,6 @@ class VRNN(nn.Module):
         return kld_loss, reconstruction_loss, \
             (all_enc_mean, all_enc_std)
 
-
-    # def sample(self, seq_len):
-
-    #     sample = torch.zeros(seq_len, 1, self.x_dim, self.x_dim, device=device)
-
-    #     h = torch.zeros(self.n_layers, 1, self.h_dim, device=device)
-    #     for t in range(seq_len):
-
-    #         #prior
-    #         prior_t = self.prior(h[-1])
-    #         prior_mean_t = self.prior_mean(prior_t)
-    #         prior_std_t = self.prior_std(prior_t)
-
-    #         #sampling and reparameterization
-    #         z_t = self._reparameterized_sample(prior_mean_t, prior_std_t)
-    #         zt_tilde = self.phi_z(z_t)
-
-    #         #decoder
-    #         xt_hat = self.dec(torch.cat([zt_tilde, h[-1]], 1))
-    #         # print(dec_mean_t.shape) # batch X 1 X H x W
-    #         #dec_std_t = self.dec_std(dec_t)
-
-    #         xt_tilde = self.embed(xt_hat) # Batch X h dim
-
-    #         #recurrence
-    #         _, h = self.rnn(torch.cat([xt_tilde, zt_tilde], 1).unsqueeze(0), h)
-
-    #         sample[t] = xt_hat.data
-
-    #     return sample
-
     def reconstruct(self, x):
         """ Generate reconstructed frames x_t_hat. 
         """
