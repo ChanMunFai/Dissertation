@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
 
-from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
+from dataloader.bouncing_ball.bouncing_data import BouncingBallDataLoader
 
 def test_z_cond_ll(z_next_value):
     z_sample = torch.zeros((32, 10, 4))

@@ -179,7 +179,7 @@ class KalmanVAE(nn.Module):
             kalman_gain = torch.matmul(kalman_gain, torch.inverse(s))
         
             ### Update mean 
-            error = obs[t] - torch.matmul(C[:,t,:, :], torch.matmul(A[:,t,:, :], mu_t)) # extra A compared to old code
+            error = obs[t] - torch.matmul(C[:,t,:, :], torch.matmul(A[:,t,:, :], mu_t)) 
             mu_t = torch.matmul(A[:,t,:, :], mu_t) + torch.matmul(kalman_gain, error)
 
             ### Update Variance 

@@ -25,7 +25,6 @@ from dataloader.healing_mnist import HealingMNISTDataLoader
 from dataloader.minerl_navigate import MinecraftRLDataLoader
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple, CNNFastEncoder  
 from kvae.modules_minecraft import MinecraftEncoder, MinecraftDecoder
-from encoder_decoder.architecture3 import initialise_autoencoder_navigate_rl
 
 import wandb
 
@@ -45,14 +44,8 @@ class EncoderDecoder(nn.Module):
             self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 32).to(self.device)
 
         elif self.args.dataset == "MinecraftRL": 
-            # self.encoder = MinecraftEncoder(input_channels = 3, input_size = 64, a_dim = self.args.a_dim).to(self.device)
-            # self.decoder = MinecraftDecoder(a_dim = self.args.a_dim, out_channels = 3).to(self.device)
-
-            if self.args.variant == "architecture3": 
-                dim_data = [self.args.batch_size * 100, 3, 64, 64]
-                autoencoder = initialise_autoencoder_navigate_rl(dim_data, self.args.a_dim, ch1 = 10, ch2 = 10, k = 5).to(self.device)
-                self.encoder = autoencoder.encoder
-                self.decoder = autoencoder.decoder 
+            self.encoder = MinecraftEncoder(input_channels = 3, input_size = 64, a_dim = self.args.a_dim).to(self.device)
+            self.decoder = MinecraftDecoder(a_dim = self.args.a_dim, out_channels = 3).to(self.device)
 
         self._init_weights()
 
@@ -102,11 +95,8 @@ class EncoderDecoder(nn.Module):
         a_sample, a_mu, a_log_var = self._encode(x) 
         
         x_hat = self._decode(a_sample).reshape(B,T,C,H,W)
-        x_mu = x_hat # assume they are the same for now
-        # print(torch.min(x_mu), torch.max(x_mu))
-        # print(torch.min(a_sample), torch.max(a_sample))
-        # print(torch.min(a_mu), torch.max(a_mu))
-        # print(torch.min(a_log_var), torch.max(a_log_var))
+        x_mu = x_hat 
+    
 
         # Calculate Bernoulli Loss 
         eps = 1e-5

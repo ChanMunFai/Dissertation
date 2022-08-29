@@ -1,5 +1,4 @@
 # Code is used to test weights of Kalman Filter during inference 
-# Used to debug for weird artefacts during prediction 
 
 import os 
 import argparse 
@@ -15,8 +14,8 @@ import bar_chart_race as bcr
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple 
 from kvae.elbo_loss import ELBO
 from kvae.model_kvae import KalmanVAE
-from data.MovingMNIST import MovingMNIST
-from dataset.bouncing_ball.bouncing_data import BouncingBallDataLoader
+from dataloader.moving_mnist import MovingMNISTDataLoader
+from dataloader.bouncing_ball import BouncingBallDataLoader
 
 state_dict_path = "saves/BouncingBall_50/kvae/v2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_80.pth" 
 # state_dict_path = "saves/BouncingBall_20/kvae/v1/attempt2/scale=0.3/scheduler_step=20/kvae_state_dict_scale=0.3_60.pth"
