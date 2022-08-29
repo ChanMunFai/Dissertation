@@ -3,7 +3,7 @@ import torch.distributions
 import torch.nn as nn
 
 from dataloader.MovingMNIST import MovingMNISTDataLoader
-from sv2p.cdna import CDNA # network for CDNA
+from sv2p.cdna import CDNA 
 from sv2p.model_sv2p import PosteriorInferenceNet, LatentVariableSampler
 
 from utils import kld_gauss, kld_standard_gauss
@@ -46,6 +46,19 @@ def test_KL_divergence():
         print(out2)
 
         break 
+
+batch_size = 3
+
+def test_prior(): 
+    sampler = LatentVariableSampler()
+    sampler.using_prior = True
+
+    prior_mean = torch.zeros(batch_size, 1, 8, 8)
+    prior_std = torch.ones(batch_size, 1, 8, 8) # wrong - should be isotropic 
+
+    for i in range(3): 
+        z = sampler.sample_prior((batch_size, 1, 8, 8))
+        print(z[0][0][0][0])
 
 
 if __name__ == "__main__":
