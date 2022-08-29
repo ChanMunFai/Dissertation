@@ -36,7 +36,7 @@ class ELBO():
         self.device = x.device
 
         self.x = x
-        self.x_mu = x_mu # Not yet supported in decoder # no need for x_var because it is a constant
+        self.x_mu = x_mu 
         self.x_hat = x_hat
         self.a_sample = a_sample 
         self.a_mu = a_mu
@@ -107,16 +107,6 @@ class ELBO():
             a_dist = MultivariateNormal(mean, scale_tril=torch.linalg.cholesky(var))
             log_ll = a_dist.log_prob(self.a_sample[:,t]).mean()
             
-            # if abs(log_ll) > 100: 
-            #     print("===> A_sample")
-            #     print(self.a_sample[:,t])
-
-            #     print("\n ===> Mean")
-            #     print(mean)
-
-            #     print("\n ===> Variance")
-            #     print(var)
-        
             log_ll_a += log_ll
 
         return log_ll_a
