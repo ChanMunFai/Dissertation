@@ -22,7 +22,10 @@ from torch.optim.lr_scheduler import ExponentialLR
 import matplotlib.pyplot as plt
 from dataloader.moving_mnist import MovingMNISTDataLoader
 from dataloader.healing_mnist import HealingMNISTDataLoader
+from dataloader.minerl_navigate import MinecraftRLDataLoader
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple, CNNFastEncoder  
+from kvae.modules_minecraft import MinecraftEncoder, MinecraftDecoder
+from encoder_decoder.architecture3 import initialise_autoencoder_navigate_rl
 
 import wandb
 
@@ -40,6 +43,16 @@ class EncoderDecoder(nn.Module):
         elif self.args.dataset == "HealingMNIST_20": 
             self.encoder = CNNFastEncoder(1, self.args.a_dim).to(self.device)
             self.decoder = DecoderSimple(input_dim = self.args.a_dim, output_channels = 1, output_size = 32).to(self.device)
+
+        elif self.args.dataset == "MinecraftRL": 
+            # self.encoder = MinecraftEncoder(input_channels = 3, input_size = 64, a_dim = self.args.a_dim).to(self.device)
+            # self.decoder = MinecraftDecoder(a_dim = self.args.a_dim, out_channels = 3).to(self.device)
+
+            if self.args.variant == "architecture3": 
+                dim_data = [self.args.batch_size * 100, 3, 64, 64]
+                autoencoder = initialise_autoencoder_navigate_rl(dim_data, self.args.a_dim, ch1 = 10, ch2 = 10, k = 5).to(self.device)
+                self.encoder = autoencoder.encoder
+                self.decoder = autoencoder.decoder 
 
         self._init_weights()
 
@@ -63,6 +76,7 @@ class EncoderDecoder(nn.Module):
         (a_mu, a_log_var, _) = self.encoder(x)
         eps = torch.normal(mean=torch.zeros_like(a_mu)).to(x.device)
         a_std = (a_log_var*0.5).exp()
+
         a_sample = a_mu + a_std*eps
         a_sample = a_sample.to(x.device)
         
@@ -89,6 +103,10 @@ class EncoderDecoder(nn.Module):
         
         x_hat = self._decode(a_sample).reshape(B,T,C,H,W)
         x_mu = x_hat # assume they are the same for now
+        # print(torch.min(x_mu), torch.max(x_mu))
+        # print(torch.min(a_sample), torch.max(a_sample))
+        # print(torch.min(a_mu), torch.max(a_mu))
+        # print(torch.min(a_log_var), torch.max(a_log_var))
 
         # Calculate Bernoulli Loss 
         eps = 1e-5
@@ -100,6 +118,8 @@ class EncoderDecoder(nn.Module):
         calc_mse = nn.MSELoss(reduction = 'sum') # pixel-wise MSE 
         mse = calc_mse(x_mu, x)
         mse = mse/x.size(0)
+
+        print(ll, mse)
 
         return -ll, mse 
 
@@ -126,6 +146,7 @@ class EncDecTrainer:
     
         if state_dict_path: 
             state_dict = torch.load(state_dict_path, map_location = self.args.device)
+            print(f"Loaded State Dict from {state_dict_path}")
             logging.info(f"Loaded State Dict from {state_dict_path}")
             
             self.model.load_state_dict(state_dict)
@@ -158,7 +179,9 @@ class EncDecTrainer:
                 
                 data = data.to(self.args.device)
                 data = (data - data.min()) / (data.max() - data.min())
-                data = torch.where(data > 0.5, 1.0, 0.0)
+                
+                if self.args.dataset != "MinecraftRL": 
+                    data = torch.where(data > 0.5, 1.0, 0.0) # do not binarise for minecraftRL
 
                 #forward + backward + optimize
                 self.optimizer.zero_grad()
@@ -218,7 +241,7 @@ class EncDecTrainer:
         return reconstructed_wandb, ground_truth_wandb
 
     def _save_model(self, epoch):  
-        checkpoint_path = f'saves/{self.args.dataset}/enc_dec/{self.args.subdirectory}/a_dim={self.args.a_dim}/'
+        checkpoint_path = f'saves/{self.args.dataset}/enc_dec/{self.args.variant}/{self.args.subdirectory}/a_dim={self.args.a_dim}/'
 
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
@@ -232,24 +255,25 @@ class EncDecTrainer:
         return checkpoint_name
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default = "HealingMNIST_20", type = str, 
+parser.add_argument('--dataset', default = "MinecraftRL", type = str, 
                     help = "choose between [MovingMNIST, BouncingBall_20, BouncingBall_50, HealingMNIST_20]")
 parser.add_argument('--epochs', default=1, type=int)
 parser.add_argument('--subdirectory', default="testing", type=str)
 parser.add_argument('--model', default="Enc_Dec", type=str)
+parser.add_argument('--variant', default="architecture3", type=str) 
 
-parser.add_argument('--a_dim', default=2, type=int)
+parser.add_argument('--a_dim', default=32, type=int)
 parser.add_argument('--lstm_layers', default=1, type=int, 
                     help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
 
 parser.add_argument('--clip', default=150, type=int)
 parser.add_argument('--scale', default=0.3, type=float)
 
-parser.add_argument('--batch_size', default=1, type=int)
+parser.add_argument('--batch_size', default=32, type=int)
 parser.add_argument('--learning_rate', default=0.007, type=float)
 parser.add_argument('--scheduler_step', default=82, type=int, 
                     help = 'number of steps for scheduler. choose a number greater than epochs to have constant LR.')
-parser.add_argument('--save_every', default=10, type=int) 
+parser.add_argument('--save_every', default=2, type=int) 
 parser.add_argument('--wandb_on', default=None, type=str)
 
 def main():
@@ -263,7 +287,7 @@ def main():
         if args.subdirectory == "testing":
             wandb.init(project="Testing")
         else: 
-            wandb.init(project=f"Enc_Dec_{args.dataset}")
+            wandb.init(project=f"Enc_Dec_{args.dataset}_{args.variant}")
 
     if torch.cuda.is_available():
         args.device = torch.device('cuda')
@@ -278,10 +302,12 @@ def main():
         state_dict_path = None 
     elif args.dataset == "HealingMNIST_20": 
         state_dict_path = None 
+    elif args.dataset == "MinecraftRL": 
+        state_dict_path = None 
        
     # set up logging
     log_fname = f'{args.model}_a_dim={args.a_dim}_epochs={args.epochs}.log'
-    log_dir = f"logs/{args.dataset}/{args.model}/{args.subdirectory}/"
+    log_dir = f"logs/{args.dataset}/{args.model}/{args.variant}/{args.subdirectory}/"
     log_path = log_dir + log_fname
     if not os.path.isdir(log_dir):
         os.makedirs(log_dir)
@@ -316,6 +342,20 @@ def main():
                     dataset=val_set, 
                     batch_size=args.batch_size, 
                     shuffle=True)
+
+    elif args.dataset == "MinecraftRL": 
+        train_set = MinecraftRLDataLoader("dataset/MinecraftRL/", train = True, seen_len = 100)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = MinecraftRLDataLoader("dataset/MinecraftRL/", train = False, seen_len = 36)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
 
     else: 
         raise NotImplementedError

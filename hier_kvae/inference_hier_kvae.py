@@ -9,11 +9,13 @@ import torchvision
 
 from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple 
 from hier_kvae.model_hier_kvae import HierKalmanVAE
+from hier_kvae.model_hier_kvae_v3 import HierKalmanVAE_v3
 from kvae.model_kvae import KalmanVAE
 from kvae.model_kvae_mod import KalmanVAEMod
 from dataloader.moving_mnist import MovingMNISTDataLoader
 from dataloader.bouncing_ball import BouncingBallDataLoader
 from dataloader.healing_mnist import HealingMNISTDataLoader
+from dataloader.dancing_mnist import DancingMNISTDataLoader
 
 
 def load_dataset(dataset, batch_size): 
@@ -51,6 +53,34 @@ def load_dataset(dataset, batch_size):
                     dataset=train_set, 
                     batch_size=batch_size, 
                     shuffle=True)
+
+    elif dataset == "DancingMNIST_20": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v1/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+
+    elif dataset == "DancingMNIST_20_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v2/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=True)
+
+    elif dataset == "DancingMNIST_50_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/50/v2/', train = True, seen_len = 20)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+
+    elif dataset == "DancingMNIST_100_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/100/v2/', train = True, seen_len = 20)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
     else: 
         raise NotImplementedError
 
@@ -64,8 +94,11 @@ def load_dataset(dataset, batch_size):
 
 def load_kvae(Args): 
     args = Args()
-    if args.model == "Hier_KVAE": 
+    if args.model == "Hier_KVAE":  
         kvae = HierKalmanVAE(args = args).to(args.device)
+
+    elif args.model == "Hier_KVAE_v3": 
+        kvae = HierKalmanVAE_v3(args = args).to(args.device)
 
     elif args.model == "KVAE_mod": 
         kvae = KalmanVAEMod(args = args).to(args.device)
@@ -121,7 +154,7 @@ def plot_predictions(x, target, pred_len, args):
 
     kvae = load_kvae(args)
 
-    if args.model == "KVAE_hier": 
+    if args.model == "KVAE_hier" or args.model == "Hier_KVAE" or args.model == "Hier_KVAE_v3": 
         x_predicted = kvae.predict(x, pred_len)
     else: 
         x_predicted, *_ = kvae.predict(x, pred_len)
@@ -140,7 +173,6 @@ def plot_predictions(x, target, pred_len, args):
 
         ground_truth = target[batch_item,:,:,:,:]
         ground_truth_frames = torchvision.utils.make_grid(ground_truth,ground_truth.size(0))
-        stitched_frames = torchvision.utils.make_grid([ground_truth_frames, predicted_frames],1)
 
         plt.imsave(output_dir_pred + f"predictions_{batch_item}.jpeg",
                 predicted_frames.cpu().permute(1, 2, 0).numpy())
@@ -157,12 +189,10 @@ def plot_predictions_diff_colours(x, target, pred_len, args):
     """
     kvae = load_kvae(args)
 
-    if args.model == "KVAE_hier": 
+    if args.model == "KVAE_hier" or args.model == "Hier_KVAE" or args.model == "Hier_KVAE_v3": 
         x_predicted = kvae.predict(x, pred_len)
     else: 
         x_predicted, *_ = kvae.predict(x, pred_len)
-    
-    print("Size of Predictions:", x_predicted.size())
     
     for batch_item, i in enumerate(x_predicted):
         output_dir_pred = f"results/{args.dataset}/Hier_KVAE/{args.subdirectory}/Coloured_Predictions/"
@@ -183,7 +213,7 @@ def plot_predictions_overlap(x, target, pred_len, args):
     """ Plot overlaps of predictions and ground truth."""
     kvae = load_kvae(args)
 
-    if args.model == "KVAE_hier": 
+    if args.model == "KVAE_hier" or args.model == "Hier_KVAE" or args.model == "Hier_KVAE_v3": 
         x_predicted = kvae.predict(x, pred_len)
     else: 
         x_predicted, *_ = kvae.predict(x, pred_len)
@@ -242,7 +272,7 @@ def calc_model_losses_over_time(x, target, pred_len, args):
     mse = nn.MSELoss(reduction = 'mean') # pixel-wise MSE 
     mse_loss = []
     
-    if args.model == "Hier_KVAE": 
+    if args.model == "Hier_KVAE" or args.model == "Hier_KVAE_v3": 
         x_predicted = kvae.predict(x, pred_len)
     else: 
         x_predicted, _, _ = kvae.predict(x, pred_len)
@@ -254,8 +284,8 @@ def calc_model_losses_over_time(x, target, pred_len, args):
         
     return mse_loss
 
-class Ex1_Args:
-    subdirectory = "experiment_hier"
+class args1_1:
+    subdirectory = "level=1"
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
     alpha = "rnn"
@@ -270,8 +300,8 @@ class Ex1_Args:
     factor = 1
     state_dict_path = "saves/BouncingBall_50/kvae_hier/v1/levels=1/factor=1/kvae_state_dict_scale_89.pth"
 
-class Ex2_Args:
-    subdirectory = "experiment_hier_2" # not complete yet 
+class args2_1:
+    subdirectory = "level=2, factor=1" 
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
     alpha = "rnn"
@@ -286,8 +316,8 @@ class Ex2_Args:
     factor = 1
     state_dict_path = "saves/BouncingBall_50/kvae_hier/v3/levels=2/factor=1/kvae_state_dict_scale_89.pth"
 
-class Ex3_Args:
-    subdirectory = "experiment_hier_3" 
+class args2_2:
+    subdirectory = "level=2, factor=2" 
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
     alpha = "rnn"
@@ -302,8 +332,8 @@ class Ex3_Args:
     factor = 2
     state_dict_path = "saves/BouncingBall_50/kvae_hier/v3/levels=2/factor=2/kvae_state_dict_scale_89.pth"
 
-class Ex4_Args:
-    subdirectory = "levels=3_factor=1" 
+class args3_1:
+    subdirectory = "level=3, factor=1" 
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
     alpha = "rnn"
@@ -316,9 +346,9 @@ class Ex4_Args:
     scale = 0.3
     levels = 3
     factor = 1
-    state_dict_path = "saves/BouncingBall_50/kvae_hier/v1/levels=3/factor=1/kvae_state_dict_scale_89.pth"
+    state_dict_path = "saves/BouncingBall_50/kvae_hier/updated/levels=3/factor=1/kvae_state_dict_scale_89.pth"
 
-class Ex5_Args:
+class args3_2:
     subdirectory = "experiment_hier_5" 
     dataset = "BouncingBall_50"
     model = 'Hier_KVAE' # or KVAE 
@@ -332,7 +362,7 @@ class Ex5_Args:
     scale = 0.3
     levels = 3
     factor = 2
-    state_dict_path = "saves/BouncingBall_50/kvae_hier/v1/levels=3/factor=2/kvae_state_dict_scale_89.pth"
+    state_dict_path = "saves/BouncingBall_50/kvae_hier/updated/levels=3/factor=2/kvae_state_dict_scale_89.pth"
 
 class KVAE_Args:
     subdirectory = "experiment_kvae"

@@ -49,6 +49,10 @@ class KvaeEncoder(nn.Module):
             elif self.input_size == 28: 
                 self.mu_out = nn.Linear(128, self.a_dim)
                 self.log_var_out = nn.Linear(128, self.a_dim) 
+        elif self.input_channels == 3: 
+            if self.input_size == 64: 
+                self.mu_out = nn.Linear(1568, self.a_dim) 
+                self.log_var_out = nn.Linear(1568, self.a_dim) 
         else: 
             raise NotImplementedError 
         
@@ -200,6 +204,8 @@ class DecoderSimple(nn.Module):
         else: 
             raise NotImplementedError
 
+        self.output_channels = output_channels
+
         self.in_dec = nn.Linear(input_dim, 32*self.latent_size*self.latent_size)
         self.hidden_convs = nn.ModuleList([
             nn.ConvTranspose2d(in_channels=32,
@@ -227,7 +233,10 @@ class DecoderSimple(nn.Module):
             a_seq = F.pad(a_seq, (0,1,0,1))
 
         x_mu = torch.sigmoid(self.out_conv(a_seq))
-        x_mu = torch.reshape(x_mu, (B, T, self.output_size, self.output_size))
+        if self.output_channels == 1: 
+            x_mu = torch.reshape(x_mu, (B, T, self.output_size, self.output_size))
+        else: 
+            x_mu = torch.reshape(x_mu, (B, T, self.output_channels, self.output_size, self.output_size))
         return x_mu
 
 class MLP(nn.Module):

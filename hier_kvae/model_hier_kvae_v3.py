@@ -7,14 +7,13 @@ import torch.nn as nn
 from torch.distributions import MultivariateNormal, Normal, Bernoulli
 import matplotlib.pyplot as plt 
 
-from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple, MLP, CNNFastEncoder 
-from encoder_decoder.architecture3 import initialise_autoencoder_navigate_rl 
+from kvae.modules import KvaeEncoder, Decoder64, DecoderSimple, MLP, CNNFastEncoder  
 from kvae.elbo_loss_mod import ELBO
 from utils import count_parameters
 
-class HierKalmanVAE(nn.Module):
+class HierKalmanVAE_v3(nn.Module):
     def __init__(self, *args, **kwargs):
-        super(HierKalmanVAE, self).__init__()
+        super(HierKalmanVAE_v3, self).__init__()
         self.args = kwargs['args']
         self.x_dim = self.args.x_dim
         self.a_dim = self.args.a_dim
@@ -41,12 +40,6 @@ class HierKalmanVAE(nn.Module):
         elif self.args.dataset == "DancingMNIST_20" or self.args.dataset == "DancingMNIST_20_v2": 
             self.encoder = CNNFastEncoder(1, self.a_dim).to(self.device)
             self.decoder = DecoderSimple(input_dim = self.a_dim, output_channels = 1, output_size = 32).to(self.device)
-        elif self.args.dataset == "MinecraftRL": 
-            dim_data = [self.args.batch_size * 100, 3, 64, 64]
-            autoencoder = initialise_autoencoder_navigate_rl(dim_data, self.args.a_dim, ch1 = 10, ch2 = 10, k = 5).to(self.device)
-            self.encoder = autoencoder.encoder
-            self.decoder = autoencoder.decoder 
-
         else: 
             raise NotImplementedError
 
@@ -59,6 +52,9 @@ class HierKalmanVAE(nn.Module):
         # Initialise a_1 (optional)
         self.a1 = nn.Parameter(torch.zeros(self.a_dim, requires_grad=True, device = self.device))
         self.state_dyn_net = None
+
+        self.mu_j0 = nn.Parameter(torch.zeros(self.z_dim, requires_grad = True, device = self.device))
+        self.sigma_j0 = nn.Parameter(20 * torch.eye(self.z_dim, requires_grad = True, device = self.device))
 
         # Initialise p(z_1) 
         self.mu_0 = torch.zeros(self.z_dim, device = self.device, dtype = torch.float)
@@ -173,17 +169,6 @@ class HierKalmanVAE(nn.Module):
         D = D.to(obs.device)
         C = C.to(obs.device)
 
-        # print("Initial A matrix!")
-        # print(self.A.shape) # K X levels X 24 X 24 
-        # print(self.A[0,2,0]) # only the second level is 0 
-        # print(self.A[1,2,0]) # again, second level is 0 
-        # print(self.A[2,2,0]) # again, second level is 0 
-        # print("=======>")
-
-        # print("Interpolated A matrix!")
-        # print(A[0,:,2,0,:]) # highest level 
-        # print("=======>")
-
         (T, B, _) = obs.size()
         obs = obs.unsqueeze(-1)
 
@@ -197,9 +182,9 @@ class HierKalmanVAE(nn.Module):
 
         S_tensor = torch.zeros(T, B, self.a_dim, self.a_dim, device = self.device, dtype = torch.float) 
 
-        mu_j = mu_t.clone() + 0.01 
+        mu_j = self.mu_j0.clone().expand(B,-1).unsqueeze(-1)
         mu_j_original = mu_j.clone() 
-        sigma_j = self.sigma_0.expand(B, -1,-1).to(self.device)
+        sigma_j = self.sigma_j0.clone().expand(B,-1, -1)
         sigma_j_original = sigma_j.clone() 
         latent_means = torch.zeros(T, B, self.levels, self.z_dim, 1, device = self.device, dtype = torch.float)
         latent_variances = torch.zeros(T, B, self.levels, self.z_dim, self.z_dim, device = self.device, dtype = torch.float) 
@@ -216,8 +201,6 @@ class HierKalmanVAE(nn.Module):
                             mu_j = torch.matmul(A[:,t,l,:,:], mu_j) 
                             sigma_j = torch.matmul(torch.matmul(A[:,t,l,:,:], sigma_j), torch.transpose(A[:,t,l,:,:], 1,2)) 
                             sigma_j += self.O.unsqueeze(0) 
-                            # print(f"level = {l}, time = {t}, {mu_j[0,2,0]}")
-                            # print(A[:,t,l,0,:]) # still remains as 1 
 
                     latent_means[t, :, l, :, :] = mu_j 
                     latent_variances[t, :, l, :, :] = sigma_j
@@ -230,14 +213,10 @@ class HierKalmanVAE(nn.Module):
 
                         else: 
                             mu_j = torch.matmul(A[:,t,l,:,:], mu_j) 
-                            
-                            mu_j = mu_j + torch.matmul(D[:,t,l,:,:], latent_means[t,:,l+1,:,:].clone())
+                            mu_j = mu_j + torch.matmul(D[:,t,l,:,:], latent_means[t,:,l+1,:,:].detach().clone())
                             sigma_j = torch.matmul(torch.matmul(A[:,t,l,:,:], sigma_j), torch.transpose(A[:,t,l,:,:], 1,2)) 
-                            sigma_j = sigma_j + torch.matmul(torch.matmul(D[:,t,l,:,:], latent_variances[t,:,l+1,:,:].clone()), torch.transpose(D[:,t,l,:,:], 1,2))
-                            sigma_j += self.Q.unsqueeze(0) # modified
-                    
-                            # print(f"level = {l}, time = {t}, {mu_j[0,2,0]}")
-                            # print(A[:,t,l,:,:])
+                            sigma_j = sigma_j + torch.matmul(torch.matmul(D[:,t,l,:,:], latent_variances[t,:,l+1,:,:].detach().clone()), torch.transpose(D[:,t,l,:,:], 1,2))
+                            sigma_j += self.O.unsqueeze(0) 
 
                     latent_means[t, :, l, :, :] = mu_j 
                     latent_variances[t, :, l, :, :] = sigma_j
@@ -268,7 +247,7 @@ class HierKalmanVAE(nn.Module):
                         if self.levels > 1: 
                             mu_t += torch.matmul(D[:,t+1,l,:,:], latent_means[t,:,l+1,:,:])
                             sigma_t += torch.matmul(torch.matmul(D[:,t+1,l,:,:], latent_variances[t,:,l+1,:,:]), torch.transpose(D[:,t+1,l,:,:], 1,2))
-
+                        
         return (mu_filt, sigma_filt), (mu_pred, sigma_pred), (latent_means, latent_variances), S_tensor
 
     def forward(self, x):
@@ -320,7 +299,7 @@ class HierKalmanVAE(nn.Module):
         
         return averaged_weights
 
-    def predict(self, input, pred_len, return_latents = False):
+    def predict(self, input, pred_len, return_weights = False):
         """ Predicts a sequence of length pred_len given input. 
         """
         ### Seen data
@@ -372,8 +351,7 @@ class HierKalmanVAE(nn.Module):
                     dyn_emb = self.parameter_net(a_t.reshape(B, -1))
 
                 weights = dyn_emb.softmax(-1).squeeze(1)
-                
-                # pred_weights[:,t] = weights
+                pred_weights[:,t] = weights
 
                 C_t = torch.matmul(weights, self.C.reshape(self.K, -1)).reshape(B, self.a_dim, self.z_dim) # BS X z_dim x z_dim 
 
@@ -407,14 +385,10 @@ class HierKalmanVAE(nn.Module):
                         a_t = a_t.unsqueeze(1)
                         
                         z_sequence[:,t,:] = z_t
-                        j_sequence[:,l,t,:,:] = z_t.unsqueeze(-1)
                         a_sequence[:,t,:] = a_t.squeeze(1)
 
             pred_seq = self._decode(a_sequence).reshape(B,pred_len,C,H,W) # BS X pred_len X C X H X W 
     
-            if return_latents == True: 
-                return pred_seq, j_sequence
-
             return pred_seq
 
     def calc_pred_mse(self, input, target):

@@ -44,7 +44,28 @@ def load_dataset(dataset, batch_size):
         train_loader = torch.utils.data.DataLoader(
                     dataset=train_set, 
                     batch_size=batch_size, 
-                    shuffle=True)
+                    shuffle=False)
+
+    elif dataset == "DancingMNIST_20_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/20/v2/', train = True)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+
+    elif dataset == "DancingMNIST_50_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/50/v2/', train = True, seen_len = 20)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
+
+    elif dataset == "DancingMNIST_100_v2": 
+        train_set = DancingMNISTDataLoader('dataset/DancingMNIST/100/v2/', train = True, seen_len = 20)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=batch_size, 
+                    shuffle=False)
     else: 
         raise NotImplementedError
 
