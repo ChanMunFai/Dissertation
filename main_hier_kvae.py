@@ -20,11 +20,12 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 import matplotlib.pyplot as plt
 from hier_kvae.model_hier_kvae import HierKalmanVAE
-from hier_kvae.model_hier_kvae_v2 import HierKalmanVAE_V2
+from hier_kvae.model_hier_kvae_v3 import HierKalmanVAE_v3
 from dataloader.moving_mnist import MovingMNISTDataLoader
 from dataloader.bouncing_ball import BouncingBallDataLoader
 from dataloader.healing_mnist import HealingMNISTDataLoader
 from dataloader.dancing_mnist import DancingMNISTDataLoader
+from dataloader.minerl_navigate import MinecraftRLDataLoader
 from utils import count_parameters
 
 import wandb
@@ -38,8 +39,8 @@ class HierKVAETrainer:
         # Change out encoder and decoder 
         if self.args.model == "KVAE_hier":
             self.model = HierKalmanVAE(args = self.args).to(self.args.device)
-        elif self.args.model == "KVAE_hier_V2":
-            self.model = HierKalmanVAE_V2(args = self.args).to(self.args.device)
+        elif self.args.model == "KVAE_hier_v3":
+            self.model = HierKalmanVAE_v3(args = self.args).to(self.args.device)
         
         num_params = count_parameters(self.model)
         print("Number of Parameters: ", num_params)
@@ -51,11 +52,17 @@ class HierKVAETrainer:
         self.scheduler = ExponentialLR(self.optimizer, gamma=0.85)
     
         if state_dict_path: 
-            state_dict = torch.load(state_dict_path, map_location = self.args.device)
-            
-            logging.info(f"Loaded State Dict from {state_dict_path}")
-            
-            self.model.load_state_dict(state_dict)
+            try: 
+                state_dict = torch.load(state_dict_path, map_location = self.args.device)
+                self.model.load_state_dict(state_dict)
+                logging.info(f"Loaded State Dict from {state_dict_path}")
+            except: 
+                current_model_dict = self.model.state_dict()
+                pretrained_dict = torch.load(state_dict_path, map_location = self.args.device)
+                pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in current_model_dict}
+                current_model_dict.update(pretrained_dict)
+                self.model.load_state_dict(current_model_dict)
+                logging.info(f"Loaded State Dict from {state_dict_path}")
 
     def train(self, train_loader, val_loader):
         n_iterations = 0
@@ -172,7 +179,7 @@ class HierKVAETrainer:
         logging.info("Finished training.")
 
         final_checkpoint = self._save_model(epoch)
-        logging.info(f'Saved model. Final Checkpoint {final_checkpoint}')
+        logging.info(f'Saved model. Final Chefckpoint {final_checkpoint}')
 
     def _save_model(self, epoch):  
         model_name = self.args.model.lower()
@@ -273,9 +280,9 @@ parser.add_argument('--alpha', default="rnn", type=str,
 parser.add_argument('--lstm_layers', default=1, type=int, 
                     help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
 
-parser.add_argument('--x_dim', default=1, type=int)
-parser.add_argument('--a_dim', default=16, type=int)
-parser.add_argument('--z_dim', default=4, type=int)
+parser.add_argument('--x_dim', default=3, type=int)
+parser.add_argument('--a_dim', default=50, type=int)
+parser.add_argument('--z_dim', default=32, type=int)
 parser.add_argument('--K', default=3, type=int)
 
 parser.add_argument('--clip', default=150, type=int)
@@ -313,7 +320,13 @@ def main():
     else:
         args.device = torch.device('cpu')
 
-    state_dict_path = None 
+    if args.dataset == "MinecraftRL": 
+        # state_dict_path = None 
+        state_dict_path = "saves/MinecraftRL/kvae_hier/v3/levels=1/factor=1/kvae_state_dict_scale_89.pth"
+    elif args.dataset == "MovingMNIST": 
+        state_dict_path = None 
+    else: 
+        state_dict_path = None 
        
     # set up logging
     log_fname = f'{args.model}_levels={args.levels}_factor={args.factor}_epochs={args.epochs}.log'
@@ -417,7 +430,20 @@ def main():
                     dataset=val_set, 
                     batch_size=args.batch_size, 
                     shuffle=True)
-                    
+
+    elif args.dataset == "MinecraftRL": 
+        train_set = MinecraftRLDataLoader("dataset/MinecraftRL/", train = True, seen_len = 100)
+        train_loader = torch.utils.data.DataLoader(
+                    dataset=train_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
+        val_set = MinecraftRLDataLoader("dataset/MinecraftRL/", train = False, seen_len = 36)
+        val_loader = torch.utils.data.DataLoader(
+                    dataset=val_set, 
+                    batch_size=args.batch_size, 
+                    shuffle=True)
+
     else: 
         raise NotImplementedError
 

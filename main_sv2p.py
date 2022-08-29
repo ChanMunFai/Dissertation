@@ -17,7 +17,7 @@ from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 
 import matplotlib.pyplot as plt
-from sv2p.cdna import CDNA # network for CDNA
+from sv2p.cdna import CDNA 
 from sv2p.model_sv2p import PosteriorInferenceNet, LatentVariableSampler
 from scheduler import LinearScheduler
 
@@ -437,13 +437,13 @@ def main():
         state_dict_path_stoc = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_cdna_state_dict_19.pth"
         state_dict_posterior = "saves/BouncingBall_50/sv2p/stage2/v1/sv2p_posterior_state_dict_19.pth"
     elif args.dataset == "HealingMNIST_20": 
-        state_dict_path_det =  None # "saves/HealingMNIST_20/sv2p/stage0/v1/sv2p_cdna_state_dict_49.pth" 
-        state_dict_path_stoc = "saves/HealingMNIST_20/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth" 
-        state_dict_posterior = None 
+        state_dict_path_det =  None 
+        state_dict_path_stoc = "saves/HealingMNIST_20/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth"
+        state_dict_posterior = None  
     elif args.dataset == "DancingMNIST_20_v2": 
-        state_dict_path_det =  None # "saves/DancingMNIST_20_v2/sv2p/stage0/v1/sv2p_cdna_state_dict_49.pth" 
-        state_dict_path_stoc = "saves/DancingMNIST_20_v2/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth" 
-        state_dict_posterior = None 
+        state_dict_path_det =  None 
+        state_dict_path_stoc = "saves/DancingMNIST_20_v2/sv2p/stage1/v1/sv2p_cdna_state_dict_29.pth"
+        state_dict_posterior = None  
     else: 
         raise NotImplementedError
 

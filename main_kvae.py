@@ -356,7 +356,7 @@ def main():
         args.device = torch.device('cpu')
 
     if args.dataset == "MovingMNIST": 
-        state_dict_path = None 
+        state_dict_path = "None" 
     elif args.dataset == "BouncingBall_20": 
         state_dict_path = None 
     elif args.dataset == "BouncingBall_50": 
