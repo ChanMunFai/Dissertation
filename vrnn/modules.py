@@ -1,4 +1,4 @@
-"""Architecture modified from https://github.com/sksq96/pytorch-vae/blob/master/vae-cnn.ipynb"""
+# Encoder Decoder modules for VRNN 
 
 import torch
 import torch.nn as nn
@@ -25,15 +25,16 @@ class Conv(nn.Module):
             nn.ReLU(),
             nn.Conv2d(128, 256, kernel_size = 4, stride = 2),
             nn.ReLU(),
-            nn.Flatten()
-            # shape: batch_size X 1024 (input size of 64 X 64)
+            nn.Flatten() # shape: batch_size X 1024 (input size of 64 X 64)
         )
 
     def forward(self, input):
         return self.main(input)
 
 class FastEncoder(nn.Module): 
-    """ Embed x_t to x_t tilde 
+    """ Embed x_t to x_t tilde
+
+    Similar architecture to encoder used in KVAE.  
 
     Modified from: https://github.com/charlio23/bouncing-ball/blob/main/models/modules.py
     """
@@ -100,6 +101,8 @@ class UnFlatten(nn.Module):
 class FastDecoder(nn.Module):
     """ Embed h_t-1 and z_t_tilde (combined dimension: 2 * h_dim)
     into x_t_hat (shape: Number of channels X Width X Height)
+
+    Similar architecture to decoder used in KVAE.  
 
     Code modified from https://github.com/charlio23/bouncing-ball/blob/main/models/modules.py
 

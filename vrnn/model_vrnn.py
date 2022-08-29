@@ -69,7 +69,6 @@ class VRNN(nn.Module):
     def forward(self, x):
 
         all_enc_mean, all_enc_std = [], []
-        # all_dec_mean, all_dec_std = [], []
         kld_loss = 0
         reconstruction_loss = 0
 
@@ -108,11 +107,6 @@ class VRNN(nn.Module):
             all_enc_std.append(enc_std_t)
             all_enc_mean.append(enc_mean_t)
 
-            # print("Prior mean", prior_mean_t.shape) # 50 by 32
-            # print("Prior std", prior_std_t.shape)
-            # print("Posterior mean", enc_mean_t)
-            # print("Posterior std", enc_std_t)
-
         reconstruction_loss = reconstruction_loss/x.size(0) # divide by batch size
         # print("MSE loss after 1 forward pass:", reconstruction_loss)
 
@@ -120,35 +114,35 @@ class VRNN(nn.Module):
             (all_enc_mean, all_enc_std)
 
 
-    def sample(self, seq_len):
+    # def sample(self, seq_len):
 
-        sample = torch.zeros(seq_len, 1, self.x_dim, self.x_dim, device=device)
+    #     sample = torch.zeros(seq_len, 1, self.x_dim, self.x_dim, device=device)
 
-        h = torch.zeros(self.n_layers, 1, self.h_dim, device=device)
-        for t in range(seq_len):
+    #     h = torch.zeros(self.n_layers, 1, self.h_dim, device=device)
+    #     for t in range(seq_len):
 
-            #prior
-            prior_t = self.prior(h[-1])
-            prior_mean_t = self.prior_mean(prior_t)
-            prior_std_t = self.prior_std(prior_t)
+    #         #prior
+    #         prior_t = self.prior(h[-1])
+    #         prior_mean_t = self.prior_mean(prior_t)
+    #         prior_std_t = self.prior_std(prior_t)
 
-            #sampling and reparameterization
-            z_t = self._reparameterized_sample(prior_mean_t, prior_std_t)
-            zt_tilde = self.phi_z(z_t)
+    #         #sampling and reparameterization
+    #         z_t = self._reparameterized_sample(prior_mean_t, prior_std_t)
+    #         zt_tilde = self.phi_z(z_t)
 
-            #decoder
-            xt_hat = self.dec(torch.cat([zt_tilde, h[-1]], 1))
-            # print(dec_mean_t.shape) # batch X 1 X H x W
-            #dec_std_t = self.dec_std(dec_t)
+    #         #decoder
+    #         xt_hat = self.dec(torch.cat([zt_tilde, h[-1]], 1))
+    #         # print(dec_mean_t.shape) # batch X 1 X H x W
+    #         #dec_std_t = self.dec_std(dec_t)
 
-            xt_tilde = self.embed(xt_hat) # Batch X h dim
+    #         xt_tilde = self.embed(xt_hat) # Batch X h dim
 
-            #recurrence
-            _, h = self.rnn(torch.cat([xt_tilde, zt_tilde], 1).unsqueeze(0), h)
+    #         #recurrence
+    #         _, h = self.rnn(torch.cat([xt_tilde, zt_tilde], 1).unsqueeze(0), h)
 
-            sample[t] = xt_hat.data
+    #         sample[t] = xt_hat.data
 
-        return sample
+    #     return sample
 
     def reconstruct(self, x):
         """ Generate reconstructed frames x_t_hat. 
@@ -181,63 +175,7 @@ class VRNN(nn.Module):
 
         return reconstructed_frames
 
-    def predict(self, x):
-        """Predicts for video frames given that the model has no 
-        ground truth access to future.
-
-        Splits x into 2 sub-sequences. Model does not see the 2nd sub sequence, and predicts
-        purely using 1st sub-sequence and predicted frames.
-        """
-        seq_length = x.size(1)
-        seq_length_train = int(seq_length/2)
-        seq_length_test = seq_length - seq_length_train
-
-        h = torch.zeros(self.n_layers, x.size(0), self.h_dim, device=device)
-
-        predicted_frames = torch.zeros(seq_length_test, 1, self.x_dim, self.x_dim, device=device)
-        true_future_frames = torch.zeros(seq_length_train, 1, self.x_dim, self.x_dim, device=device)
-
-        for t in range(x.size(1)):
-            if t < seq_length_train: # seen data
-                xt = x[:,t,:,:,:]
-                xt_tilde = self.embed(xt)
-
-                #encoder and reparameterisation
-                enc_t = self.enc(torch.cat([xt_tilde, h[-1]], 1))
-                enc_mean_t = self.enc_mean(enc_t)
-                enc_std_t = self.enc_std(enc_t)
-
-                zt = self._reparameterized_sample(enc_mean_t, enc_std_t)
-
-                #decoding
-                zt_tilde = self.phi_z(zt)
-                input_latent = torch.cat([zt_tilde, h[-1]], 1)
-                xt_hat = self.dec(input_latent)
-
-            else: # unseen data
-                xt = xt_hat # use predicted xt instead of actual xt
-                xt_tilde = self.embed(xt)
-
-                #encoder and reparameterisation
-                enc_t = self.enc(torch.cat([xt_tilde, h[-1]], 1))
-                enc_mean_t = self.enc_mean(enc_t)
-                enc_std_t = self.enc_std(enc_t)
-
-                zt = self._reparameterized_sample(enc_mean_t, enc_std_t)
-
-                #decoding
-                zt_tilde = self.phi_z(zt)
-                input_latent = torch.cat([zt_tilde, h[-1]], 1)
-                xt_hat = self.dec(input_latent)
-
-                predicted_frames[t-seq_length_train] = xt_hat
-
-            #recurrence
-            _, h = self.rnn(torch.cat([xt_tilde, zt_tilde], 1).unsqueeze(0), h)
-
-        return predicted_frames
-
-    def predict_new(self, input, target): 
+    def predict(self, input, target): 
         total_len = input.size(1) + target.size(1)
         train_len = input.size(1)
         predicted_frames = torch.full_like(target, 0) 
