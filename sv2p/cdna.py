@@ -1,13 +1,10 @@
 """
 Source: https://github.com/kkew3/cse291g-sv2p/blob/master/src/sv2p/cdna.py
 
-Implement the CDNA video prediction network.
-    .. code-block:: bibtex
-        Unsupervised learning for physical interaction through video
-        prediction. CoRR, abs/1605.07157.
-
-CDNA is the generative network which predicts the next frame given the previous frames,
-latent values and actions.
+Implement the Convolutional Dynamic Neural Advection (CDNA) model.
+   
+CDNA is the generative network which predicts the next frame 
+given the previous frames, latent values (optional) and actions.
 """
 
 import typing
