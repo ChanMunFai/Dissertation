@@ -173,17 +173,6 @@ class HierKalmanVAE(nn.Module):
         D = D.to(obs.device)
         C = C.to(obs.device)
 
-        # print("Initial A matrix!")
-        # print(self.A.shape) # K X levels X 24 X 24 
-        # print(self.A[0,2,0]) # only the second level is 0 
-        # print(self.A[1,2,0]) # again, second level is 0 
-        # print(self.A[2,2,0]) # again, second level is 0 
-        # print("=======>")
-
-        # print("Interpolated A matrix!")
-        # print(A[0,:,2,0,:]) # highest level 
-        # print("=======>")
-
         (T, B, _) = obs.size()
         obs = obs.unsqueeze(-1)
 
@@ -274,10 +263,6 @@ class HierKalmanVAE(nn.Module):
     def forward(self, x):
         (B,T,C,H,W) = x.size()
 
-        ### Raise warning 
-        # if self.factor ** self.levels >  T: 
-        #     print("WARNING: temporal scale and/or no. of levels is too large for the data.")
-
         a_sample, a_mu, a_log_var = self._encode(x) 
         filtered, pred, hierachical, S_tensor, A_t, C_t, D_t, weights = self._kalman_posterior(a_sample)
         mu_z_pred = pred[0]
@@ -336,7 +321,6 @@ class HierKalmanVAE(nn.Module):
             mu_z, sigma_z = filtered  
             mu_z = torch.transpose(mu_z, 1, 0)
             sigma_z = torch.transpose(sigma_z, 1, 0)
-            # sigma_z = torch.clamp(sigma_z, 1e-5, 1 - 1e-5)
 
             z_dist = MultivariateNormal(mu_z.squeeze(-1), scale_tril=torch.linalg.cholesky(sigma_z))
             z_sample = z_dist.sample()
@@ -346,11 +330,6 @@ class HierKalmanVAE(nn.Module):
             j_mean = torch.transpose(j_mean, 1, 0) # BS X T X layers X z_dim X 1
             j_var = torch.transpose(j_var, 1, 0) # BS X T X layers X z_dim X z_dim
             
-            ### Just use j_mean directly 
-            # replace with j_var 
-            # j_dist = MultivariateNormal(j_mean.squeeze(-1), scale_tril=torch.linalg.cholesky(j_var))
-            # j_sample = j_var.sample()
-
             ### Unseen data
             z_sequence = torch.zeros((B, pred_len, self.z_dim), device = self.device)
             a_sequence = torch.zeros((B, pred_len, self.a_dim), device = self.device)
@@ -358,7 +337,6 @@ class HierKalmanVAE(nn.Module):
             a_t = a_sample[:, -1, :].unsqueeze(1) # BS X T X a_dim
             z_t = z_sample[:, -1, :].to(torch.float32) # BS X T X z_dim
             j_t = j_mean[:, -1,:,:,:].to(torch.float32) # BS X 1 X layers X z_dim
-            # j_t = j_sample[:, -1,:,:,:].to(torch.float32)
 
             pred_weights = torch.zeros((B, pred_len, self.K), device = self.device)
 
@@ -468,7 +446,7 @@ if __name__ == "__main__":
     parser.add_argument('--lstm_layers', default=1, type=int, 
                     help = "Number of LSTM layers. To be used only when alpha is 'rnn'.")
     parser.add_argument('--levels', default=3, type=int, 
-                    help = "Number of levels in Linear State Space Model.")
+                    help = "Number of levels in Linear Gaussian State Space Model.")
     parser.add_argument('--factor', default=2, type=int, 
                     help = "Temporal Abstraction Factor.")
 
