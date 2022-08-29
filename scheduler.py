@@ -23,7 +23,7 @@ class LinearScheduler:
         return self.value 
 
 def test_scheduler(): 
-    train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
+    train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
     train_loader = torch.utils.data.DataLoader(
                 dataset=train_set,
                 batch_size=16,
