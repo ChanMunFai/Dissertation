@@ -17,7 +17,7 @@ from sv2p.cdna import CDNA
 from sv2p.model_sv2p import PosteriorInferenceNet, LatentVariableSampler
 from vrnn.model_vrnn import VRNN
 
-from data.MovingMNIST import MovingMNIST
+from data.MovingMNISTDataLoader import MovingMNISTDataLoader
 
 seed = 128
 torch.manual_seed(seed)
@@ -41,20 +41,19 @@ q_net.load_state_dict(state_dict_posterior)
 sampler = LatentVariableSampler()
 
 # Load in dataset
-test_set = MovingMNIST(root='dataset/mnist', train=False, download=True)
+test_set = MovingMNISTDataLoader(root='dataset/mnist', train=False, download=True)
 test_loader = torch.utils.data.DataLoader(
                 dataset=test_set,
                 batch_size=batch_size,
                 shuffle=False)
 
-train_set = MovingMNIST(root='dataset/mnist', train=True, download=True)
+train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
 train_loader = torch.utils.data.DataLoader(
                 dataset=train_set,
                 batch_size=batch_size,
                 shuffle=False)
     
 def print_reconstructions():
-    # Just use training set for now 
     
     output_dir = f"results/images/sv2p/reconstructions/train/"
     checkdir(output_dir)
@@ -110,8 +109,6 @@ def print_reconstructions():
         i+= 1
     
 def print_predictions(num_samples = 1, true_posterior = False):
-    # Just use training set for now 
-    
     output_dir = f"results/{dataset}/sv2p/predictions/"
     checkdir(output_dir)
 
@@ -124,7 +121,7 @@ def print_predictions(num_samples = 1, true_posterior = False):
     total_len = data.size(1) + targets.size(1)
 
     for n in range(num_samples): 
-        z = sampler.sample_prior((batch_size, 1, 8, 8)).to(device)     # Sample latent variables from prior 
+        z = sampler.sample_prior((batch_size, 1, 8, 8)).to(device) # Sample latent variables from prior 
 
         if true_posterior == True: 
             mu, sigma = q_net(data)
@@ -215,14 +212,14 @@ def calc_sv2p_losses_over_time():
     with torch.no_grad():
         for t in range(total_len): 
             if t < data.size(1): # seen data
-                x_t = data[:, t, :, :, :] # t = 0, 1, 2, 3, 4
+                x_t = data[:, t, :, :, :] 
                 predictions_t, hidden, _, _ = model(inputs = x_t, conditions = z,
-                                                hidden_states=hidden) # t = 1, 2, 3, 4, 5
+                                                hidden_states=hidden) 
         
-                last_seen_image = x_t # t = 0, 1, 2, 3, 4
+                last_seen_image = x_t 
 
             else: 
-                ground_truth_t = targets[:, t - data.size(1), :, :, :] # t = 6, 7, 8, 9
+                ground_truth_t = targets[:, t - data.size(1), :, :, :] 
                 x_t = predictions_t # use predicted x_t instead of actual x_t
                 predictions_t, hidden, _, _ = model(inputs = x_t, conditions = z,
                                                 hidden_states=hidden) 

@@ -1,3 +1,5 @@
+# Modified from: https://github.com/emited/VariationalRecurrentNeuralNetwork
+
 import math
 import torch
 import torch.nn as nn
