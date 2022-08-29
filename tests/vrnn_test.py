@@ -1,7 +1,7 @@
 import torch
 
 from model_vrnn import VRNN
-from data.MovingMNIST import MovingMNIST
+from dataloader.MovingMNIST import MovingMNISTDataLoader
 import torch.nn as nn
 
 EPS = torch.finfo(torch.float).eps # numerical logs
@@ -17,11 +17,8 @@ def kld_gauss(mean_1, std_1, mean_2, std_2):
         std_2.pow(2) - 1)
     return	0.5 * torch.sum(kld_element)
 
-# Test for min and max values of input - DONE
-# Ensure that data is normalised between 0 and 1 - DONE
-# Calculate MSE for network that always produces black image
 
-train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
+train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
 train_loader = torch.utils.data.DataLoader(
                 dataset=train_set,
                 batch_size=64,

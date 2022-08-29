@@ -2,7 +2,7 @@ import torch
 import torch.distributions
 import torch.nn as nn
 
-from data.MovingMNIST import MovingMNIST
+from dataloader.MovingMNIST import MovingMNISTDataLoader
 from sv2p.cdna import CDNA # network for CDNA
 from sv2p.model_sv2p import PosteriorInferenceNet, LatentVariableSampler
 
@@ -12,7 +12,7 @@ seed = 128
 torch.manual_seed(seed)
 batch_size = 52
 
-train_set = MovingMNIST(root='.dataset/mnist', train=True, download=True)
+train_set = MovingMNISTDataLoader(root='dataset/mnist', train=True, download=True)
 train_loader = torch.utils.data.DataLoader(
             dataset=train_set,
             batch_size=batch_size,
@@ -45,10 +45,6 @@ def test_KL_divergence():
         out2 = out.mean()
         print(out2)
 
-        # Does it make a difference if I do not unsqueeze it? No 
-        
-
-        
         break 
 
 
