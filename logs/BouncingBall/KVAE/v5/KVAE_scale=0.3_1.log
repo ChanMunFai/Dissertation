@@ -1,1 +1,0 @@
-INFO:root:Namespace(K=3, a_dim=2, alpha='rnn', batch_size=1, clip=150, dataset='BouncingBall', device=device(type='cpu'), epochs=1, learning_rate=0.007, model='KVAE', save_every=10, scale=0.3, subdirectory='v5', wandb_on=None, x_dim=1, z_dim=4)

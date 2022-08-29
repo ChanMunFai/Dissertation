@@ -1,9 +1,0 @@
-INFO:root:Namespace(K=3, a_dim=2, alpha='rnn', batch_size=128, clip=150, dataset='BouncingBall_20', device=device(type='cuda'), epochs=90, initial_epochs=10, learning_rate=0.007, lstm_layers=1, model='KVAE_mod', save_every=10, scale=0.3, scheduler_step=20, subdirectory='testing', train_reconstruction=False, wandb_on='True', x_dim=1, z_dim=4)
-INFO:root:Starting KVAE training for 90 epochs.
-INFO:root:Train Loss, Reconstruction Loss, log q(a), ELBO_KF, MSE
-INFO:root:nan, 4008.43197593, 22.62703402, nan, 1149.96181053, 0.007
-INFO:root:nan, 746.72766615, 45.34938769, nan, 222.66778999, 0.007
-INFO:root:nan, 463.88238757, 50.98308230, nan, 136.18829085, 0.007
-INFO:root:nan, 464.87749201, 48.14544108, nan, 138.11097920, 0.007
-INFO:root:-12654609215569937665840814367562530816.00000000, 421.18639905, 47.61517489, 12654609215569937665840814367562530816.00000000, 126.75324027, 0.007
-INFO:root:-12573865713155884697534562150673022976.00000000, 306.22872423, 48.70270838, 12573865713155884697534562150673022976.00000000, 92.00637286, 0.007
